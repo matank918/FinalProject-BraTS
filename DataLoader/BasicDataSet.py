@@ -7,7 +7,6 @@ from scipy.ndimage import zoom
 from matplotlib import pyplot
 import matplotlib.pyplot as plt
 import numpy as np
-import SimpleITK as sitk
 
 class BasicDataset(Dataset):
     """
@@ -115,7 +114,7 @@ class BasicDataset(Dataset):
 
 
 if __name__ == '__main__':
-    dir = r'C:\Users\Elinoy\Documents\project\new data'
+    dir = r'C:\Users\User\Documents\FinalProject\FinalProject-BraTS\Data'
     Dataset = BasicDataset(dir)
     Dataset.__getitem__(0)
     Dataset.show_image(0)

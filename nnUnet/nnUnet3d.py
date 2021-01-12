@@ -1,7 +1,7 @@
 import importlib
 import torch
 import torch.nn as nn
-from unet_parts import Encoder, Decoder
+from UnetParts import Encoder, Decoder
 from BuildingBlocks import DoubleConv
 
 
@@ -93,14 +93,5 @@ if __name__ == '__main__':
     f_maps = [32, 64, 128, 256, 320, 320]
     model = UNet3D(4, 4, f_maps, basic_module=DoubleConv, testing=False)
     model.to(device)
-    rand_image = torch.rand(1, 4, 128, 128, 128).to(device)
-    try:
-        out = model(rand_image)
-    except RuntimeError as e:
-        print('WARNING: ran out of memory, retrying batch')
-        for p in model.parameters():
-            if p.grad is not None:
-                del p.grad
-        torch.cuda.empty_cache()
-        out = model(rand_image)
+    rand_image = torch.rand(4, 4, 128, 128, 128).to(device)
 
