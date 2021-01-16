@@ -7,7 +7,7 @@ from BuildingBlocks import DoubleConv
 
 class Abstract3DUNet(nn.Module):
 
-    def __init__(self, in_channels, out_channels, f_maps, basic_module, apply_pooling, interpolate,testing=False):
+    def __init__(self, in_channels, out_channels, f_maps, apply_pooling, interpolate,testing, basic_module=DoubleConv):
         """
           Args:
               :param in_channels:(int) number of input channels
@@ -81,17 +81,17 @@ class Abstract3DUNet(nn.Module):
 
 
 class UNet3D(Abstract3DUNet):
-    def __init__(self, in_channels, out_channels, f_maps, basic_module, testing):
+    def __init__(self, in_channels, out_channels, f_maps, apply_pooling, interpolate, testing):
         super(UNet3D, self).__init__(in_channels=in_channels, out_channels=out_channels,
-                                     f_maps=f_maps, basic_module=basic_module, apply_pooling=False,
-                                     interpolate=False,testing=testing)
+                                     f_maps=f_maps, apply_pooling=apply_pooling,
+                                     interpolate=interpolate,testing=testing)
 
 
 if __name__ == '__main__':
     torch.cuda.empty_cache()
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     f_maps = [32, 64, 128, 256, 320, 320]
-    model = UNet3D(4, 4, f_maps, basic_module=DoubleConv, testing=False)
+    model = UNet3D(4, 4, f_maps, interpolate=False,apply_pooling=False,testing=False)
     model.to(device)
-    rand_image = torch.rand(4, 4, 128, 128, 128).to(device)
-
+    rand_image = torch.rand(1, 4, 128, 128, 128).to(device)
+    print(model(rand_image))

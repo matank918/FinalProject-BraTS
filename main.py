@@ -12,24 +12,35 @@ import configparser
 import pathlib
 
 
-def _LoadData(config):
-    cwd = pathlib.Path.cwd()
-    last_dir = cwd.name
-    cwd = str(cwd)
-    print(cwd)
-    last_dir = str(last_dir)
-    imgs_dir = cwd.replace(last_dir, config['loader']['path'])
-    print(imgs_dir)
-    dataset = BasicDataset(imgs_dir)
-    val_percent=config['loader']['val percent']
-    batch_size=config['loader']['batch size']
-    n_val = int(len(dataset) * val_percent)
-    n_train = len(dataset) - n_val
-    train, val = random_split(dataset, [n_train, n_val])
-    train_loader = DataLoader(train, batch_size=batch_size, shuffle=True, num_workers=8, pin_memory=True)
-    val_loader = DataLoader(val, batch_size=batch_size, shuffle=False, num_workers=8, pin_memory=True, drop_last=True)
-    loader_dict={'train': train_loader ,'val':val_loader }
-    return loader_dict
+def get_model(config):
+    def _model_class(class_name):
+        m = importlib.import_module('nnUnet.nnUnet3d')
+        clazz = getattr(m, class_name)
+        return clazz
+
+    model_name = config['general']['name']
+    model_config = dict(config['model'].items())
+    print(model_config)
+
+    model_class = _model_class(model_name)
+    return model_class(**model_config)
+
+
+# def get_train_loaders(config):
+#     cwd = pathlib.Path.cwd()
+#     last_dir = cwd.name
+#     cwd = str(cwd)
+#     last_dir = str(last_dir)
+#     imgs_dir = cwd.replace(last_dir, config['loader']['path'])
+#     imgs_dir = imgs_dir + '\\' +'HGG'
+#     dataset = BasicDataset(imgs_dir)
+#     batch_size=config['loader']['batch size']
+#     n_train = len(dataset) - n_val
+#     train, val = random_split(dataset, [n_train, n_val])
+#     train_loader = DataLoader(train, batch_size=batch_size, shuffle=True, num_workers=8, pin_memory=True)
+#     val_loader = DataLoader(val, batch_size=batch_size, shuffle=False, num_workers=8, pin_memory=True, drop_last=True)
+#     loader_dict={'train': train_loader ,'val':val_loader }
+#     return loader_dict
 
 def _create_trainer(config, model, optimizer, loss_criterion, eval_criterion, loaders):
     assert 'trainer' in config, 'Could not find trainer configuration'
@@ -58,26 +69,18 @@ def _create_optimizer(config, model):
     return optimizer
 
 
-def main():
+if __name__ == '__main__':
     # Load and log experiment configuration
     config = configparser.ConfigParser()
     config.sections()
-    config.read(r"C:\Users\Elinoy\Documents\project\final project\cfg_file.ini")
-    print(config['paths']['in_data_path'])
+    config.read("cfg_file.ini")
     logger = get_logger('UNet3DTrain')
     logger.info(config)
-    LoadData = _LoadData(config)
-#
-#     manual_seed = config.get('manual_seed', None)
-#     if manual_seed is not None:
-#         logger.info(f'Seed the RNG for all devices with {manual_seed}')
-#         torch.manual_seed(manual_seed)
-#         # see https://pytorch.org/docs/stable/notes/randomness.html
-#         torch.backends.cudnn.deterministic = True
-#         torch.backends.cudnn.benchmark = False
-#
-#     # Create the model
-#     model = get_model(config)
+    # Create data loaders
+    # loaders = get_train_loaders(config)
+    # Create the model
+    model = get_model(config)
+
 #     # use DataParallel if more than 1 GPU available
 #     device = config['device']
 #     if torch.cuda.device_count() > 1 and not device.type == 'cpu':

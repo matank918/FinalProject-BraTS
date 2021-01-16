@@ -7,15 +7,19 @@ Created on Wed May 27 17:19:37 2020
 import configparser
 config = configparser.ConfigParser()
 
+# general
+config['general'] = {'name':'UNet3D'}
+
 #model
-config['model'] = {}
+config['model'] = {'in_channels': 4, 'out_channels':4, 'f_maps':[32, 64, 128, 256, 320, 320],
+                   'apply_pooling': False, 'interpolate':False,'testing':False}
 
 #loss
 config['loss'] = {}
 
 
 #loader
-config['loader'] = {'path':'new data', 'batch size':1, 'val percent':0.1}
+config['loader'] = {'path':'Data', 'batch size':1}
 
 
 #optimizer
