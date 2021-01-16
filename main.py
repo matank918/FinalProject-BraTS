@@ -4,27 +4,25 @@ import torch
 import torch.nn as nn
 from utils import get_logger
 import torch.optim as optim
-from utils import get_number_of_learnable_parameters
+from utils import get_number_of_learnable_parameters, correct_type
 from trainer import UNet3DTrainer
 from torch.utils.data import DataLoader, random_split
 from BasicDataSet import BasicDataset
 import configparser
-import pathlib
-
 
 def get_model(config):
     def _model_class(class_name):
         m = importlib.import_module('nnUnet.nnUnet3d')
         clazz = getattr(m, class_name)
         return clazz
-
     model_name = config['general']['name']
     model_config = dict(config['model'].items())
+    model_config = correct_type(model_config)
+    print(type(model_config['f_maps']))
     print(model_config)
 
     model_class = _model_class(model_name)
     return model_class(**model_config)
-
 
 # def get_train_loaders(config):
 #     cwd = pathlib.Path.cwd()
@@ -80,6 +78,7 @@ if __name__ == '__main__':
     # loaders = get_train_loaders(config)
     # Create the model
     model = get_model(config)
+    print(model)
 
 #     # use DataParallel if more than 1 GPU available
 #     device = config['device']

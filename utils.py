@@ -1,6 +1,15 @@
 import logging
 import sys
 import numpy as np
+import ast
+
+
+def correct_type(string_dict):
+    correct_dict={}
+    for key,value in string_dict.items():
+        correct_dict[key] = ast.literal_eval(value)
+
+    return correct_dict
 
 
 class RunningAverage:
