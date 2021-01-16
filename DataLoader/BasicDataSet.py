@@ -83,7 +83,7 @@ class BasicDataset(Dataset):
 
     def norm_image(self, image):
         time_now=time.time()
-        image=(image-np.mean(image))/np.var(image)
+        image=(image-np.mean(image))/np.std(image)
         print(time.time()-time_now)
         return image
 
