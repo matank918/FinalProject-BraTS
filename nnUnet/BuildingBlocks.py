@@ -1,6 +1,5 @@
 import torch.nn as nn
 
-
 class DoubleConv(nn.Module):
     """(convolution => [IN] => LeakyReLU) * 2
       Args:
