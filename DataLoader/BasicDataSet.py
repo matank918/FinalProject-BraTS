@@ -1,12 +1,14 @@
 import os
-
+import SimpleITK as sitk
 import torch
 from torch.utils.data import Dataset
 import nibabel as nib
 from scipy.ndimage import zoom
 from matplotlib import pyplot
+from sklearn import preprocessing
 import matplotlib.pyplot as plt
 import numpy as np
+import time
 
 
 class BasicDataset(Dataset):
@@ -72,24 +74,64 @@ class BasicDataset(Dataset):
                 ax[1, 0].imshow(image_obj[:, :, image_obj.shape[2] // 2])
                 plt.show()
 
-    # def histogram_image(self, i):
-    #     file_dir = self.folder_names[i]
-    #     files_list = [os.path.join(file_dir, dI) for dI in os.listdir(file_dir)]
-    #     for file1 in files_list:
-    #             image = sitk.ReadImage(file1)
-    #             result = sitk.GetArrayFromImage(image)
-    #             print(type(result))
-    #             print(result.shape)
-    #             plt.figure('historgram')
-    #             result = result.flatten()
-    #             n, bins, patches = plt.hist(result, bins=256, range=(1, result.max()), normed=0, facecolor='red',
-    #                                             alpha=0.75, histtype='step')
-    #             plt.show()
+    def histogram_image(self, i):
+        file_dir = self.folder_names[i]
+        files_list = [os.path.join(file_dir, dI) for dI in os.listdir(file_dir)]
+        for file in files_list:
+            if 'seg' in file:
+                pass
+            else:
+                image = sitk.ReadImage(file)
+                result = sitk.GetArrayFromImage(image)
+                # print(type(result))
+                # print(result.shape)
+                plt.figure('historgram')
+                result = result.flatten()
+                n, bins, patches = plt.hist(result, bins=256, range=(1, result.max()), facecolor='red',
+                                                    alpha=0.75, histtype='step')
+                plt.show()
+
+    def norm_image(self, i):
+        time_now=time.time()
+        file_dir = self.folder_names[i]
+        files_list = [os.path.join(file_dir, dI) for dI in os.listdir(file_dir)]
+        for file in files_list:
+            if 'seg' in file:
+                pass
+            else:
+                image= nib.load(file).get_fdata()
+                # scalers = {}
+                # for i in range(image.shape[1]):
+                #     scalers[i] = preprocessing.StandardScaler()
+                #     image[i, :, :] = scalers[i].fit_transform(image[i, :, :])
+                #     image[i,:,:] += image[i, :, :]
+
+                # for j in range(image.shape[1]):
+                #     scalers[j] = preprocessing.StandardScaler()
+                #     image[:, j, :] = scalers[j].fit_transform(image[:, j, :])
+                #     image += image[:, j, :]
+
+                # for k in range(image.shape[2]):
+                #     scalers[k] = preprocessing.StandardScaler()
+                #     image[:, :, k] = scalers[k].fit_transform(image[:, :, k])
+                #     image[:,:,k] += image[:, :, k]
+
+
+                # norm_image = preprocessing.StandardScaler().fit_transform(image)
+                # print(type(norm_image))
+                # print(norm_image.shape)
+                plt.figure('historgram_norm')
+                result = image.flatten()
+                n, bins, patches = plt.hist(result, bins=256, range=(1, result.max()), facecolor='red',
+                                                    alpha=0.75, histtype='step')
+                plt.show()
+                print(time.time()-time_now)
 
 
 if __name__ == '__main__':
-    dir = r'C:\Users\User\Documents\FinalProject\FinalProject-BraTS\Data'
+    dir = r'C:\Users\Elinoy\Documents\project\new data'
     Dataset = BasicDataset(dir)
     Dataset.__getitem__(0)
-    Dataset.show_image(0)
+    # Dataset.show_image(0)
     # Dataset.histogram_image(0)
+    Dataset.norm_image(0)
