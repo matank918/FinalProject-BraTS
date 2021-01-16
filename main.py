@@ -2,11 +2,11 @@ import importlib
 
 import torch
 import torch.nn as nn
-from config import load_config
 from utils import get_logger
 import torch.optim as optim
 from utils import get_number_of_learnable_parameters
 from trainer import UNet3DTrainer
+import configparser
 
 
 def _create_trainer(config, model, optimizer, loss_criterion, eval_criterion, loaders):
@@ -16,7 +16,7 @@ def _create_trainer(config, model, optimizer, loss_criterion, eval_criterion, lo
     skip_train_validation = trainer_config.get('skip_train_validation', False)
 
     # get tensorboard formatter
-    #tensorboard_formatter = get_tensorboard_formatter(trainer_config.get('tensorboard_formatter', None))
+    # tensorboard_formatter = get_tensorboard_formatter(trainer_config.get('tensorboard_formatter', None))
 
     return UNet3DTrainer(model, optimizer, loss_criterion, eval_criterion,
                          config['device'], loaders, trainer_config['checkpoint_dir'],
@@ -38,8 +38,11 @@ def _create_optimizer(config, model):
 
 def main():
     # Load and log experiment configuration
+    config = configparser.ConfigParser()
+    config.sections()
+    config.read(r"C:\Users\User\Documents\FinalProject\FinalProject-BraTS\cfg_file.ini")
+    print(config['paths']['in_data_path'])
     logger = get_logger('UNet3DTrain')
-    config = load_config()
     logger.info(config)
 
     manual_seed = config.get('manual_seed', None)
