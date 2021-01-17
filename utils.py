@@ -7,8 +7,12 @@ import ast
 def correct_type(string_dict):
     correct_dict={}
     for key,value in string_dict.items():
-        correct_dict[key] = ast.literal_eval(value)
-
+        try:
+            correct_dict[key] = ast.literal_eval(value)
+        except ValueError:
+            correct_dict[key] = value
+        except SyntaxError:
+            correct_dict[key] = value
     return correct_dict
 
 
@@ -50,3 +54,9 @@ def get_number_of_learnable_parameters(model):
     return sum([np.prod(p.size()) for p in model_parameters])
 
 
+    # cwd = pathlib.Path.cwd()
+    # last_dir = cwd.name
+    # cwd = str(cwd)
+    # last_dir = str(last_dir)
+    # imgs_dir = cwd.replace(last_dir, config['loader']['path'])
+    # imgs_dir = imgs_dir + '\\' +'HGG'

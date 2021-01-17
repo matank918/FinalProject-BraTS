@@ -7,26 +7,23 @@ Created on Wed May 27 17:19:37 2020
 import configparser
 config = configparser.ConfigParser()
 
-# general
-config['general'] = {'name':'UNet3D'}
-
 #model
-config['model'] = {'in_channels': 4, 'out_channels':4, 'f_maps':[32, 64, 128, 256, 320, 320],
+config['model'] = {'name':'UNet3D','in_channels': 4, 'out_channels':1, 'f_maps':[32, 64, 128, 256, 320, 320],
                    'apply_pooling': False, 'interpolate':False,'testing':False}
 
 #loss
-config['loss'] = {}
+config['loss'] = {'name':'DiceLoss'}
 
 
 #loader
-config['loader'] = {'path':'Data', 'batch size':1}
+config['loader'] = {'path':r'C:\Users\User\Documents\FinalProject\MICA BRaTS2018\Training\HGG', 'val_percent':0.1, 'batch size':1}
 
 
 #optimizer
-config['optimizer'] = {}
+config['optimizer'] = {'learning_rate':0.01, 'weight_decay':0.1}
 
 #train
-config['train'] = {}
+config['train'] = {'validate_iters':20,'skip_train_validation':False,'iters':1, 'validate_after_iters':True,'log_after_iters':True}
 
 
 with open('cfg_file.ini', 'w') as configfile:

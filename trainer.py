@@ -2,7 +2,7 @@ import os
 
 import torch
 import torch.nn as nn
-#from torch.utils.tensorboard import SummaryWriter
+from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 from utils import RunningAverage
 
@@ -20,12 +20,10 @@ class UNet3DTrainer:
             saving the best checkpoint is based on the result of this function on the validation set
         device (torch.device): device to train on
         loaders (dict): 'train' and 'val' loaders
-        max_num_iterations (int): maximum number of iterations
         validate_after_iters (int): validate after that many iterations
         log_after_iters (int): number of iterations before logging to tensorboard
         validate_iters (int): number of validation iterations, if None validate
             on the whole validation set
-        num_iterations (int): useful when loading the model from the checkpoint
         num_epoch (int): useful when loading the model from the checkpoint
             that can be displayed in tensorboard
         skip_train_validation (bool): if True eval_criterion is not evaluated on the training set (used mostly when
@@ -33,11 +31,10 @@ class UNet3DTrainer:
     """
 
     def __init__(self, model, logger, optimizer, loss_criterion,
-                 eval_criterion, device, loaders, tensorboard_formatter,
-                 max_num_iterations=1e5,
-                 validate_after_iters=100, log_after_iters=100,
-                 validate_iters=None, num_iterations=1, num_epoch=0,
-                 skip_train_validation=False):
+                 eval_criterion, device, loaders,
+                 skip_train_validation, validate_iters,
+                 validate_after_iters, log_after_iters,
+                 num_epoch):
 
         self.model = model
         self.logger = logger
@@ -48,20 +45,17 @@ class UNet3DTrainer:
         self.eval_criterion = eval_criterion
         self.device = device
         self.loaders = loaders
-        self.max_num_iterations = max_num_iterations
         self.validate_after_iters = validate_after_iters
         self.log_after_iters = log_after_iters
         self.validate_iters = validate_iters
 
         self.logger.info(model)
-        self.tensorboard_formatter = tensorboard_formatter
-        self.num_iterations = num_iterations
+        self.num_iterations = 0
         self.num_epoch = num_epoch
         self.skip_train_validation = skip_train_validation
 
     def fit(self):
         for epoch in range(self.num_epoch):
-            with tqdm(total=self.num_epoch, desc=f'Epoch {epoch + 1}/{self.num_epoch}', unit='img') as pbar:
 
                 # train for one epoch
                 should_terminate = self.train(self.loaders['train'])
@@ -71,7 +65,6 @@ class UNet3DTrainer:
                     return
 
                 self.num_epoch += 1
-            #pbar.set_postfix(**{'loss (batch)': loss.item()})
 
         self.logger.info(f"Reached maximum number of epochs: {self.num_epoch}. Finishing training...")
 
@@ -88,47 +81,48 @@ class UNet3DTrainer:
         # sets the model in training mode
         self.model.train()
 
-        for i, t in enumerate(train_loader):
-            self.logger.info(
-                f'Training iteration {self.num_iterations}. Batch {i}. Epoch [{self.num_epoch}]')
+        for i, batch in enumerate(train_loader):
+            with tqdm(total=len(train_loader), desc=f'Epoch {i + 1}/{len(train_loader)}', unit='img') as pbar:
+                self.logger.info(f'Training iteration {self.num_iterations}. Batch {i}. Epoch [{self.num_epoch}]')
 
-            input, target = self._split_training_batch(t)
+                input, target = self._split_training_batch(batch)
 
-            output, loss = self._forward_pass(input, target)
+                output, loss = self._forward_pass(input, target)
 
-            train_losses.update(loss.item(), self._batch_size(input))
+                train_losses.update(loss.item(), self._batch_size(input))
 
-            # compute gradients and update parameters
-            self.optimizer.zero_grad()
-            loss.backward()
-            self.optimizer.step()
+                # compute gradients and update parameters
+                self.optimizer.zero_grad()
+                loss.backward()
+                self.optimizer.step()
 
-            if self.num_iterations % self.validate_after_iters == 0:
-                # set the model in eval mode
-                self.model.eval()
-                # evaluate on validation set
-                eval_score = self.validate(self.loaders['val'])
-                # set the model back to training mode
-                self.model.train()
+                if self.num_iterations % self.validate_after_iters == 0:
+                    # set the model in eval mode
+                    self.model.eval()
+                    # evaluate on validation set
+                    eval_score = self.validate(self.loaders['val'])
+                    # set the model back to training mode
+                    self.model.train()
 
-            if self.num_iterations % self.log_after_iters == 0:
+                if self.num_iterations % self.log_after_iters == 0:
 
-                # compute eval criterion
-                if not self.skip_train_validation:
-                    eval_score = self.eval_criterion(output, target)
-                    train_eval_scores.update(eval_score.item(), self._batch_size(input))
+                    # compute eval criterion
+                    if not self.skip_train_validation:
+                        eval_score = self.eval_criterion(output, target)
+                        train_eval_scores.update(eval_score.item(), self._batch_size(input))
 
-                # log stats, params and images
-                self.logger.info(
-                    f'Training stats. Loss: {train_losses.avg}. Evaluation score: {train_eval_scores.avg}')
-                self._log_stats('train', train_losses.avg, train_eval_scores.avg)
-                self._log_params()
-                self._log_images(input, target, output, 'train_')
+                    # log stats, params and images
+                    self.logger.info(
+                        f'Training stats. Loss: {train_losses.avg}. Evaluation score: {train_eval_scores.avg}')
+                    self._log_stats('train', train_losses.avg, train_eval_scores.avg)
+                    self._log_params()
+                    #self._log_images(input, target, output, 'train_')
 
-            if self.should_stop():
-                return True
+                if self.should_stop():
+                    return True
 
-            self.num_iterations += 1
+                self.num_iterations += 1
+            pbar.set_postfix(**{'loss (batch)': loss.item()})
 
         return False
 
@@ -137,9 +131,6 @@ class UNet3DTrainer:
         Training will terminate if maximum number of iterations is exceeded or the learning rate drops below
         some predefined threshold (1e-6 in our case)
         """
-        if self.max_num_iterations < self.num_iterations:
-            self.logger.info(f'Maximum number of iterations {self.max_num_iterations} exceeded.')
-            return True
 
         min_lr = 1e-6
         lr = self.optimizer.param_groups[0]['lr']
@@ -165,8 +156,8 @@ class UNet3DTrainer:
                 val_losses.update(loss.item(), self._batch_size(input))
 
                 if i % 100 == 0:
-                    self._log_images(input, target, output, 'val_')
-
+                    #self._log_images(input, target, output, 'val_')
+                    pass
                 eval_score = self.eval_criterion(output, target)
                 val_scores.update(eval_score.item(), self._batch_size(input))
 
@@ -178,15 +169,12 @@ class UNet3DTrainer:
             self.logger.info(f'Validation finished. Loss: {val_losses.avg}. Evaluation score: {val_scores.avg}')
             return val_scores.avg
 
-    def _split_training_batch(self, t):
-        def _move_to_device(input):
-            if isinstance(input, tuple) or isinstance(input, list):
-                return tuple([_move_to_device(x) for x in input])
-            else:
-                return input.to(self.device)
+    def _split_training_batch(self, batch):
 
-        t = _move_to_device(t)
-        input, target = t
+        input = batch['mri_image'].to(self.device)
+        input = input.type(torch.float32)
+        target = batch['seg'].to(self.device)
+        target = target.type(torch.float32)
 
         return input, target
 

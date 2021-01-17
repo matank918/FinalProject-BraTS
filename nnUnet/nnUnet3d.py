@@ -59,7 +59,7 @@ class Abstract3DUNet(nn.Module):
             x = encoder(x)
             # reverse the encoder outputs to be aligned with the decoder
             encoders_features.insert(0, x)
-            print("encoder:", x.size())
+            #print("encoder:", x.size())
 
         # remove the last encoder's output from the list
         encoders_features = encoders_features[1:]
@@ -70,7 +70,7 @@ class Abstract3DUNet(nn.Module):
             x = decoder(encoder_features, x)
             if i > 0 and self.testing and self.final_activation is not None:
                 x = self.final_activation(x)
-            print("decoder:", x.size())
+            #print("decoder:", x.size())
 
         x = self.final_conv(x)
 
@@ -94,4 +94,4 @@ if __name__ == '__main__':
     model = UNet3D(4, 4, f_maps, interpolate=False,apply_pooling=False,testing=False)
     model.to(device)
     rand_image = torch.rand(1, 4, 128, 128, 128).to(device)
-    print(model(rand_image))
+    #print(model(rand_image))
