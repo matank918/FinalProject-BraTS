@@ -16,12 +16,15 @@ class BasicDataset(Dataset):
 
         self.dir = images_dir  # str
         self.folder_names = []  # list
+        self.cancer_type = ['HGG', 'LGG']
         self.get_folder_names()
 
     def get_folder_names(self):
         """create a list of paths for each MRI image's folder"""
-        self.folder_names = [os.path.join(self.dir, dI) for dI in os.listdir(self.dir) if
-                             os.path.isdir(os.path.join(self.dir, dI))]
+        for cancer_type in self.cancer_type:
+            file_dir = os.path.join(self.dir, cancer_type)
+            self.folder_names = self.folder_names + [os.path.join(file_dir, dI) for dI in os.listdir(file_dir) if
+                                                     os.path.isdir(os.path.join(file_dir, dI))]
 
     def __len__(self):
         """:return (int): return length of the list "folder_names"""
@@ -55,13 +58,13 @@ class BasicDataset(Dataset):
                 image = nib.load(file).get_fdata()
                 image_resized = zoom(image, (0.535, 0.535, 0.825))
                 image_norm = self.norm_image(image_resized)
-                #self.histogram_image(image_norm)
+                # self.histogram_image(image_norm)
                 img_list.append(image_norm)
 
         self.mri_image = np.stack(img_list, axis=0)
-        self.seg_image = torch.unsqueeze(torch.from_numpy(self.seg_image),0)
+        self.seg_image = torch.unsqueeze(torch.from_numpy(self.seg_image), 0)
         self.mri_image = torch.from_numpy(self.mri_image)
-        return {'mri_image':self.mri_image, 'seg':self.seg_image}
+        return {'mri_image': self.mri_image, 'seg': self.seg_image}
 
     @staticmethod
     def show_image(image):
@@ -74,9 +77,9 @@ class BasicDataset(Dataset):
 
     @staticmethod
     def histogram_image(image):
-        print("mean:",np.mean(image))
-        print("var:",np.var(image))
-        print("std:",np.std(image))
+        print("mean:", np.mean(image))
+        print("var:", np.var(image))
+        print("std:", np.std(image))
 
         plt.figure('historgram')
         result = image.flatten()
@@ -84,13 +87,13 @@ class BasicDataset(Dataset):
         plt.show()
 
     def norm_image(self, image):
-        image=(image-np.mean(image))/np.std(image)
+        image = (image - np.mean(image)) / np.std(image)
         return image
 
 
 if __name__ == '__main__':
-    dir = r"C:\Users\User\Documents\FinalProject\MICA BRaTS2018\Training\HGG"
+    dir = r"C:\Users\User\Documents\FinalProject\MICA BRaTS2018\Training"
     Dataset = BasicDataset(dir)
-    item = Dataset.__getitem__(0)
-    mri_image = item['mri_image']
-    seg_image = item['seg']
+    # item = Dataset.__getitem__(0)
+    # mri_image = item['mri_image']
+    # seg_image = item['seg']

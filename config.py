@@ -16,14 +16,14 @@ config['loss'] = {'name':'DiceLoss'}
 
 
 #loader
-config['loader'] = {'path':r'C:\Users\User\Documents\FinalProject\MICA BRaTS2018\Training\HGG', 'val_percent':0.1, 'batch size':1}
+config['loader'] = {'path':r'C:\Users\User\Documents\FinalProject\MICA BRaTS2018\Training', 'val_percent':0.1, 'batch size':1}
 
 
 #optimizer
 config['optimizer'] = {'learning_rate':0.01, 'weight_decay':0.1}
 
 #train
-config['train'] = {'validate_iters':20,'skip_train_validation':False,'iters':1, 'validate_after_iters':True,'log_after_iters':True}
+config['train'] = {'validate_iters':20,'skip_train_validation':False,'iters':1, 'validate_after_iters':1,'log_after_iters':False}
 
 
 with open('cfg_file.ini', 'w') as configfile:
