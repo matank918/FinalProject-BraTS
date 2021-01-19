@@ -22,10 +22,11 @@ def get_model(config):
     model_class = _model_class(model_config.pop('name'))
     return model_class(**model_config)
 
+
 def get_train_loaders(config):
     loader_config = correct_type(dict(config['loader'].items()))
     img_dir = loader_config['path']
-    batch_size= int(config['loader']['batch size'])
+    batch_size = int(config['loader']['batch size'])
     val_percent = float(config['loader']['val_percent'])
     dataset = BasicDataset(img_dir)
     n_val = int(len(dataset) * val_percent)
@@ -60,9 +61,9 @@ def _create_trainer(config, model, device, optimizer, loss_criterion, eval_crite
                          eval_criterion=eval_criterion, logger=logger,
                          device=device, loaders=loaders, validate_iters=train_config['validate_iters'],
                          skip_train_validation = train_config['skip_train_validation'],
-                         num_epoch=train_config['iters'],
+                         num_epoch=train_config['num_epoch'],
                          validate_after_iters=train_config['validate_after_iters'],
-                         log_after_iters=train_config['log_after_iters'])
+                         log_after_iters=train_config['log_after_iters'], max_num_epoch=train_config['max_num_epoch'])
 
 
 def _create_optimizer(config, model):

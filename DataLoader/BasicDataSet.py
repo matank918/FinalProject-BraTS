@@ -5,7 +5,6 @@ import nibabel as nib
 from scipy.ndimage import zoom
 import matplotlib.pyplot as plt
 import numpy as np
-
 import time
 
 
@@ -94,6 +93,7 @@ class BasicDataset(Dataset):
 if __name__ == '__main__':
     dir = r"C:\Users\User\Documents\FinalProject\MICA BRaTS2018\Training"
     Dataset = BasicDataset(dir)
-    # item = Dataset.__getitem__(0)
-    # mri_image = item['mri_image']
+    item = Dataset.__getitem__(0)
+    mri_image = item['mri_image']
     # seg_image = item['seg']
+    Dataset.show_image(mri_image)

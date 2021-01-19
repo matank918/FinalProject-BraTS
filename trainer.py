@@ -33,8 +33,8 @@ class UNet3DTrainer:
     def __init__(self, model, logger, optimizer, loss_criterion,
                  eval_criterion, device, loaders,
                  skip_train_validation, validate_iters,
-                 validate_after_iters, log_after_iters,
-                 num_epoch):
+                 validate_after_iters, log_after_iters, num_epoch,
+                 max_num_epoch):
 
         self.model = model
         self.logger = logger
@@ -52,10 +52,11 @@ class UNet3DTrainer:
         self.logger.info(model)
         self.num_iterations = 0
         self.num_epoch = num_epoch
+        self.max_num_epoch = max_num_epoch
         self.skip_train_validation = skip_train_validation
 
     def fit(self):
-        for epoch in range(self.num_epoch):
+        for _ in range(self.num_epoch, self.max_num_epoch):
 
                 # train for one epoch
                 should_terminate = self.train(self.loaders['train'])
@@ -80,51 +81,52 @@ class UNet3DTrainer:
 
         # sets the model in training mode
         self.model.train()
+        with tqdm(total=len(train_loader), desc=f'Epoch {self.num_epoch + 1}/{self.max_num_epoch}', unit='img') as pbar:
+            for i, batch in enumerate(train_loader):
+                    #self.logger.info(f'Training iteration {self.num_iterations}. Batch {i}. Epoch [{self.num_epoch}]')
 
-        for i, batch in enumerate(train_loader):
-            with tqdm(total=len(train_loader), desc=f'Epoch {i + 1}/{len(train_loader)}', unit='img') as pbar:
-                self.logger.info(f'Training iteration {self.num_iterations}. Batch {i}. Epoch [{self.num_epoch}]')
+                    input, target = self._split_training_batch(batch)
 
-                input, target = self._split_training_batch(batch)
+                    output, loss = self._forward_pass(input, target)
 
-                output, loss = self._forward_pass(input, target)
+                    train_losses.update(loss.item(), self._batch_size(input))
 
-                train_losses.update(loss.item(), self._batch_size(input))
+                    # compute gradients and update parameters
+                    self.optimizer.zero_grad()
+                    loss.backward()
+                    self.optimizer.step()
 
-                # compute gradients and update parameters
-                self.optimizer.zero_grad()
-                loss.backward()
-                self.optimizer.step()
+                    pbar.set_postfix(**{'loss (batch)': loss.item()})
 
-                if self.num_iterations % self.validate_after_iters == 0:
-                    # set the model in eval mode
-                    self.model.eval()
-                    # evaluate on validation set
-                    eval_score = self.validate(self.loaders['val'])
-                    # set the model back to training mode
-                    self.model.train()
+                    if self.num_iterations % self.log_after_iters == 0:
 
-                if self.num_iterations % self.log_after_iters == 0:
+                        # compute eval criterion
+                        if not self.skip_train_validation:
+                            eval_score = self.eval_criterion(output, target)
+                            train_eval_scores.update(eval_score.item(), self._batch_size(input))
 
-                    # compute eval criterion
-                    if not self.skip_train_validation:
-                        eval_score = self.eval_criterion(output, target)
-                        train_eval_scores.update(eval_score.item(), self._batch_size(input))
+                        # log stats, params and images
+                        # self.logger.info(
+                        #     f'Training stats. Loss: {train_losses.avg}. Evaluation score: {train_eval_scores.avg}')
+                        self._log_stats('train', train_losses.avg, train_eval_scores.avg)
+                        self._log_params()
+                        #self._log_images(input, target, output, 'train_')
 
-                    # log stats, params and images
-                    self.logger.info(
-                        f'Training stats. Loss: {train_losses.avg}. Evaluation score: {train_eval_scores.avg}')
-                    self._log_stats('train', train_losses.avg, train_eval_scores.avg)
-                    self._log_params()
-                    #self._log_images(input, target, output, 'train_')
+                    if self.should_stop():
+                        return True
 
-                if self.should_stop():
-                    return True
-
-                self.num_iterations += 1
-            pbar.set_postfix(**{'loss (batch)': loss.item()})
+                    self.num_iterations += 1
 
         return False
+
+    def val(self):
+        if self.num_iterations % self.validate_after_iters == 0:
+            # set the model in eval mode
+            self.model.eval()
+            # evaluate on validation set
+            eval_score = self.validate(self.loaders['val'])
+            # set the model back to training mode
+            self.model.train()
 
     def should_stop(self):
         """
