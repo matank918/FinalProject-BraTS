@@ -8,27 +8,20 @@ from utils import get_number_of_learnable_parameters, correct_type
 from trainer import UNet3DTrainer
 from torch.utils.data import DataLoader, random_split
 from BasicDataSet import BasicDataset
-import configparser
 from loss import create_loss
+import config as cfg
+from nnUnet3d import UNet3D
 
 
-def get_model(config):
-    def _model_class(class_name):
-        m = importlib.import_module('nnUnet.nnUnet3d')
-        clazz = getattr(m, class_name)
-        return clazz
-
-    model_config = correct_type(dict(config['model'].items()))
-    model_class = _model_class(model_config.pop('name'))
-    return model_class(**model_config)
+def get_model():
+    return UNet3D(in_channels=cfg.in_channels, out_channels=cfg.out_channels, f_maps=cfg.f_maps
+                  , apply_pooling=cfg.apply_pooling, interpolate=cfg.interpolate, testing=cfg.testing)
 
 
-def get_train_loaders(config):
-    loader_config = correct_type(dict(config['loader'].items()))
-    img_dir = loader_config['path']
-    batch_size = int(config['loader']['batch size'])
-    val_percent = float(config['loader']['val_percent'])
-    dataset = BasicDataset(img_dir)
+def get_train_loaders():
+    dataset = BasicDataset(images_dir=cfg.loader_path)
+    batch_size = cfg.bath_size
+    val_percent = cfg.val_percent
     n_val = int(len(dataset) * val_percent)
     n_train = len(dataset) - n_val
     train, val = random_split(dataset, [n_train, n_val])
@@ -38,53 +31,39 @@ def get_train_loaders(config):
     return loader_dict
 
 
-def get_loss_criterion(config):
-    """
-    Returns the loss function based on provided configuration
-    :param config: (dict) a top level configuration object containing the 'loss' key
-    :return: an instance of the loss function
-    """
-    assert 'loss' in config, 'Could not find loss function configuration'
-    loss_config = config['loss']
-    name = loss_config.pop('name')
-
-    loss = create_loss(name, loss_config)
-
-    return loss
+def get_loss_criterion():
+    return create_loss(cfg.loss_name)
 
 
-def _create_trainer(config, model, device, optimizer, loss_criterion, eval_criterion, loaders, logger):
-    assert 'train' in config, 'Could not find train configuration'
-    train_config = correct_type(dict(config['train'].items()))
+def _create_trainer(model, device, optimizer, lr_scheduler, loss_criterion, eval_criterion, loaders, logger):
+    return UNet3DTrainer(model=model, logger=logger, optimizer=optimizer, loss_criterion=loss_criterion,
+                         lr_scheduler=lr_scheduler,
+                         eval_criterion=eval_criterion, device=device, loaders=loaders,
+                         num_iterations=cfg.num_iterations,
+                         skip_train_validation=cfg.skip_train_validation,
+                         validate_iters=cfg.validate_iters, checkpoint_dir=cfg.checkpoint_dir,
+                         best_eval_score=cfg.best_eval_score,
+                         validate_after_iters=cfg.validate_after_iters,
+                         log_after_iters=cfg.log_after_iters,
+                         num_epoch=cfg.num_epoch, max_num_iterations=cfg.max_num_iterations,
+                         eval_score_higher_is_better=cfg.eval_score_higher_is_better, max_num_epochs=cfg.max_num_epochs)
 
-    return UNet3DTrainer(model=model, optimizer=optimizer, loss_criterion=loss_criterion,
-                         eval_criterion=eval_criterion, logger=logger,
-                         device=device, loaders=loaders, validate_iters=train_config['validate_iters'],
-                         skip_train_validation = train_config['skip_train_validation'],
-                         num_epoch=train_config['num_epoch'],
-                         validate_after_iters=train_config['validate_after_iters'],
-                         log_after_iters=train_config['log_after_iters'], max_num_epoch=train_config['max_num_epoch'])
+
+def _create_optimizer(model):
+    return optim.Adam(model.parameters(), lr=cfg.learning_rate, weight_decay=cfg.weight_decay)
 
 
-def _create_optimizer(config, model):
-    assert 'optimizer' in config, 'Cannot find optimizer configuration'
-    optimizer_config = correct_type(config['optimizer'])
-    learning_rate = optimizer_config['learning_rate']
-    weight_decay = optimizer_config['weight_decay']
-    optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
-    return optimizer
+def _create_lr_scheduler(optimizer):
+    return optim.lr_scheduler.MultiStepLR(optimizer, milestones=[30, 80], gamma=0.1)
 
 
 if __name__ == '__main__':
     # Load and log experiment configuration
-    config = configparser.ConfigParser()
-    config.sections()
-    config.read("cfg_file.ini")
     logger = get_logger('UNet3DTrain')
-    logger.info(config)
+    logger.info(cfg)
 
     # Create the model
-    model = get_model(config)
+    model = get_model()
 
     # use DataParallel if more than 1 GPU available
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -100,20 +79,24 @@ if __name__ == '__main__':
     logger.info(f'Number of learnable params {get_number_of_learnable_parameters(model)}')
 
     # Create loss criterion
-    loss_criterion = get_loss_criterion(config)
+    loss_criterion = get_loss_criterion()
 
     # Create evaluation metric
     eval_criterion = loss_criterion
 
     # Create data loaders
-    loaders = get_train_loaders(config)
+    loaders = get_train_loaders()
 
     # Create the optimizer
-    optimizer = _create_optimizer(config, model)
+    optimizer = _create_optimizer(model)
+
+    # Create learning rate adjustment strategy
+    lr_scheduler = _create_lr_scheduler(optimizer)
+
     # Create model trainer
-    trainer = _create_trainer(config, model=model, optimizer=optimizer, device=device, logger=logger,
-                              loss_criterion=loss_criterion, eval_criterion=eval_criterion, loaders=loaders)
+    trainer = _create_trainer(model=model, optimizer=optimizer, device=device, logger=logger,
+                              loss_criterion=loss_criterion,
+                              eval_criterion=eval_criterion, loaders=loaders,
+                              lr_scheduler=lr_scheduler)
     # Start training
     trainer.fit()
-
-

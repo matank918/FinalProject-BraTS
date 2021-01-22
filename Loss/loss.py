@@ -101,7 +101,7 @@ class GeneralizedDiceLoss(_AbstractDiceLoss):
 
         return 2 * (intersect.sum() / denominator.sum())
 
-def create_loss(name, loss_config):
+def create_loss(name):
     if name == 'CrossEntropyLoss':
         return nn.CrossEntropyLoss()
     elif name == 'GeneralizedDiceLoss':

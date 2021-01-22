@@ -44,6 +44,7 @@ class BasicDataset(Dataset):
         img_list = []
         files_list = [os.path.join(file_dir, dI) for dI in os.listdir(file_dir)]
         for file in files_list:
+            name = file[-12:-7]
             if 'seg' in file:
                 """In seg file
                 Label 1: necrotic and non-enhancing tumor
@@ -53,10 +54,12 @@ class BasicDataset(Dataset):
                 """
                 mask = nib.load(file).get_fdata()
                 self.seg_image = zoom(mask, (0.535, 0.535, 0.825))
+
             else:
                 image = nib.load(file).get_fdata()
                 image_resized = zoom(image, (0.535, 0.535, 0.825))
                 image_norm = self.norm_image(image_resized)
+                # self.show_image(image_norm, name)
                 # self.histogram_image(image_norm)
                 img_list.append(image_norm)
 
@@ -66,12 +69,23 @@ class BasicDataset(Dataset):
         return {'mri_image': self.mri_image, 'seg': self.seg_image}
 
     @staticmethod
-    def show_image(image):
+    def show_image(image, name):
         """ display the differ angles of each image"""
-        fig, ax = plt.subplots(2, 2, figsize=(30, 30))
-        ax[0, 0].imshow(image[image.shape[0] // 2])
-        ax[0, 1].imshow(image[:, image.shape[1] // 2])
-        ax[1, 0].imshow(image[:, :, image.shape[2] // 2])
+        # fig, ax = plt.subplots(2, 2, figsize=(30, 30))
+
+        fig = plt.figure()
+        plt.title(name)
+        ax1 = fig.add_subplot(221)
+        ax2 = fig.add_subplot(222)
+        ax3 = fig.add_subplot(223)
+
+        ax1.title.set_text("Sagittal Section")
+        ax1.imshow(image[image.shape[0] // 2])
+        ax2.title.set_text("Coronal  Section")
+        ax2.imshow(image[:, image.shape[1] // 2])
+        ax3.title.set_text("Horizontal Section")
+        ax3.imshow(image[:, :, image.shape[2] // 2])
+
         plt.show()
 
     @staticmethod
@@ -93,7 +107,7 @@ class BasicDataset(Dataset):
 if __name__ == '__main__':
     dir = r"C:\Users\User\Documents\FinalProject\MICA BRaTS2018\Training"
     Dataset = BasicDataset(dir)
-    item = Dataset.__getitem__(0)
-    mri_image = item['mri_image']
-    # seg_image = item['seg']
-    Dataset.show_image(mri_image)
+    item = Dataset.__getitem__(5)
+    mri_image = item['mri_image'].numpy()
+    print(type(mri_image))
+    seg_image = np.reshape(item['seg'].numpy(),[128,128,128])

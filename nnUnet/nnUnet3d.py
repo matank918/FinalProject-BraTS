@@ -5,7 +5,6 @@ from UnetParts import Encoder, Decoder
 from BuildingBlocks import DoubleConv, SingleConv
 from utils import get_number_of_learnable_parameters, correct_type
 
-
 class Abstract3DUNet(nn.Module):
 
     def __init__(self, in_channels, out_channels, f_maps, apply_pooling, interpolate,testing, basic_module=SingleConv):

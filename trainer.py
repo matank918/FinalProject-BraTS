@@ -1,17 +1,20 @@
 import os
-
+import numpy as np
 import torch
 import torch.nn as nn
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 from utils import RunningAverage
-
+from torch.optim.lr_scheduler import ReduceLROnPlateau
+import utils
+import time
 
 class UNet3DTrainer:
     """3D UNet trainer.
-    Args:
+      Args:
         model (Unet3D): UNet 3D model to be trained
         optimizer (nn.optim.Optimizer): optimizer used for training
+        lr_scheduler (torch.optim.lr_scheduler._LRScheduler): learning rate scheduler
             WARN: bear in mind that lr_scheduler.step() is invoked after every validation step
             (i.e. validate_after_iters) not after every epoch. So e.g. if one uses StepLR with step_size=30
             the learning rate will be adjusted after every 30 * validate_after_iters iterations.
@@ -20,119 +23,164 @@ class UNet3DTrainer:
             saving the best checkpoint is based on the result of this function on the validation set
         device (torch.device): device to train on
         loaders (dict): 'train' and 'val' loaders
+        checkpoint_dir (string): dir for saving checkpoints and tensorboard logs
+        max_num_epochs (int): maximum number of epochs
+        max_num_iterations (int): maximum number of iterations
         validate_after_iters (int): validate after that many iterations
         log_after_iters (int): number of iterations before logging to tensorboard
         validate_iters (int): number of validation iterations, if None validate
             on the whole validation set
+        eval_score_higher_is_better (bool): if True higher eval scores are considered better
+        best_eval_score (float): best validation score so far (higher better)
+        num_iterations (int): useful when loading the model from the checkpoint
         num_epoch (int): useful when loading the model from the checkpoint
+        tensorboard_formatter (callable): converts a given batch of input/output/target image to a series of images
             that can be displayed in tensorboard
+        sample_plotter (callable): saves sample inputs, network outputs and targets to a given directory
+            during validation phase
         skip_train_validation (bool): if True eval_criterion is not evaluated on the training set (used mostly when
             evaluation is expensive)
     """
 
-    def __init__(self, model, logger, optimizer, loss_criterion,
-                 eval_criterion, device, loaders,
-                 skip_train_validation, validate_iters,
-                 validate_after_iters, log_after_iters, num_epoch,
-                 max_num_epoch):
+    def __init__(self, model, logger, optimizer, loss_criterion, lr_scheduler,
+                 eval_criterion, device, loaders, num_iterations,
+                 skip_train_validation, validate_iters, checkpoint_dir, best_eval_score,
+                 validate_after_iters, log_after_iters, num_epoch, max_num_iterations, eval_score_higher_is_better,
+                 max_num_epochs):
 
-        self.model = model
         self.logger = logger
         self.writer = SummaryWriter()
 
+        self.model = model
         self.optimizer = optimizer
+        self.scheduler = lr_scheduler
         self.loss_criterion = loss_criterion
         self.eval_criterion = eval_criterion
         self.device = device
         self.loaders = loaders
+        self.checkpoint_dir = checkpoint_dir
+        self.max_num_epochs = max_num_epochs
+        self.max_num_iterations = max_num_iterations
         self.validate_after_iters = validate_after_iters
         self.log_after_iters = log_after_iters
         self.validate_iters = validate_iters
+        self.eval_score_higher_is_better = eval_score_higher_is_better
 
-        self.logger.info(model)
-        self.num_iterations = 0
+        self.num_iterations = num_iterations
         self.num_epoch = num_epoch
-        self.max_num_epoch = max_num_epoch
         self.skip_train_validation = skip_train_validation
 
+
+        self.logger.info(model)
+        logger.info(f'eval_score_higher_is_better: {eval_score_higher_is_better}')
+
+        if best_eval_score is not None:
+            self.best_eval_score = best_eval_score
+        else:
+            # initialize the best_eval_score
+            if eval_score_higher_is_better:
+                self.best_eval_score = float('-inf')
+            else:
+                self.best_eval_score = float('+inf')
+
     def fit(self):
-        for _ in range(self.num_epoch, self.max_num_epoch):
 
-                # train for one epoch
-                should_terminate = self.train(self.loaders['train'])
+        for _ in range(self.num_epoch, self.max_num_epochs):
+            # train for one epoch
+            should_terminate = self.train()
 
-                if should_terminate:
-                    self.logger.info('Stopping criterion is satisfied. Finishing training')
-                    return
+            if should_terminate:
+                self.logger.info('Stopping criterion is satisfied. Finishing training')
+                return
 
-                self.num_epoch += 1
+            self.num_epoch += 1
 
-        self.logger.info(f"Reached maximum number of epochs: {self.num_epoch}. Finishing training...")
+        self.logger.info(f"Reached maximum number of epochs: {self.max_num_epochs}. Finishing training...")
 
-    def train(self, train_loader):
+    def train(self):
         """Trains the model for 1 epoch.
         Args:
             train_loader (torch.utils.data.DataLoader): training data loader
         Returns:
             True if the training should be terminated immediately, False otherwise
         """
+
         train_losses = RunningAverage()
         train_eval_scores = RunningAverage()
-
+        time_now = time.time()
         # sets the model in training mode
         self.model.train()
-        with tqdm(total=len(train_loader), desc=f'Epoch {self.num_epoch + 1}/{self.max_num_epoch}', unit='img') as pbar:
-            for i, batch in enumerate(train_loader):
-                    #self.logger.info(f'Training iteration {self.num_iterations}. Batch {i}. Epoch [{self.num_epoch}]')
+        for batch in self.loaders['train']:
 
-                    input, target = self._split_training_batch(batch)
+                self.logger.info(f'Training iteration [{self.num_iterations}/{self.max_num_iterations}]. '
+                        f'Epoch [{self.num_epoch}/{self.max_num_epochs}]')
 
-                    output, loss = self._forward_pass(input, target)
+                input, target = self._split_training_batch(batch)
 
-                    train_losses.update(loss.item(), self._batch_size(input))
+                output, loss = self._forward_pass(input, target)
+                print("train loss:", loss.item())
 
-                    # compute gradients and update parameters
-                    self.optimizer.zero_grad()
-                    loss.backward()
-                    self.optimizer.step()
+                train_losses.update(loss.item(), self._batch_size(input))
 
-                    pbar.set_postfix(**{'loss (batch)': loss.item()})
+                # compute gradients and update parameters
+                self.optimizer.zero_grad()
+                loss.backward()
+                self.optimizer.step()
 
-                    if self.num_iterations % self.log_after_iters == 0:
+                if self.num_iterations % self.validate_after_iters == 0:
+                    # set the model in eval mode
+                    self.model.eval()
+                    # evaluate on validation set
+                    eval_score = self.validate()
+                    # set the model back to training mode
+                    self.model.train()
 
-                        # compute eval criterion
-                        if not self.skip_train_validation:
-                            eval_score = self.eval_criterion(output, target)
-                            train_eval_scores.update(eval_score.item(), self._batch_size(input))
+                    # adjust learning rate if necessary
+                    if isinstance(self.scheduler, ReduceLROnPlateau):
+                        self.scheduler.step(eval_score)
+                    else:
+                        self.scheduler.step()
 
-                        # log stats, params and images
-                        # self.logger.info(
-                        #     f'Training stats. Loss: {train_losses.avg}. Evaluation score: {train_eval_scores.avg}')
-                        self._log_stats('train', train_losses.avg, train_eval_scores.avg)
-                        self._log_params()
-                        #self._log_images(input, target, output, 'train_')
+                    # log current learning rate in tensorboard
+                    self._log_lr()
 
-                    if self.should_stop():
-                        return True
+                    # remember best validation metric
+                    is_best = self._is_best_eval_score(eval_score)
 
-                    self.num_iterations += 1
+                    # save checkpoint
+                    self._save_checkpoint(is_best)
+
+                if self.num_iterations % self.log_after_iters == 0:
+
+                    # compute eval criterion
+                    if not self.skip_train_validation:
+                        eval_score = self.eval_criterion(output, target)
+                        train_eval_scores.update(eval_score.item(), self._batch_size(input))
+
+                    # log stats, params and images
+                    self.logger.info(
+                        f'Training stats. Loss: {train_losses.avg}. Evaluation score: {train_eval_scores.avg}')
+
+                    self._log_stats('train', train_losses.avg, train_eval_scores.avg)
+                    self._log_params()
+                    # self._log_images(input, target, output, 'train_')
+
+                if self.should_stop():
+                    return True
+                print("time for one iteration:", time.time()-time_now)
+                self.num_iterations += 1
 
         return False
-
-    def val(self):
-        if self.num_iterations % self.validate_after_iters == 0:
-            # set the model in eval mode
-            self.model.eval()
-            # evaluate on validation set
-            eval_score = self.validate(self.loaders['val'])
-            # set the model back to training mode
-            self.model.train()
 
     def should_stop(self):
         """
         Training will terminate if maximum number of iterations is exceeded or the learning rate drops below
         some predefined threshold (1e-6 in our case)
         """
+
+        if self.max_num_iterations < self.num_iterations:
+            self.logger.info(f'Maximum number of iterations {self.max_num_iterations} exceeded.')
+            return True
 
         min_lr = 1e-6
         lr = self.optimizer.param_groups[0]['lr']
@@ -142,26 +190,31 @@ class UNet3DTrainer:
 
         return False
 
-    def validate(self, val_loader):
+    def validate(self):
+
         self.logger.info('Validating...')
+
 
         val_losses = RunningAverage()
         val_scores = RunningAverage()
 
         with torch.no_grad():
-            for i, t in enumerate(val_loader):
-                self.logger.info(f'Validation iteration {i}')
+            for i, batch in enumerate(self.loaders['val']):
 
-                input, target = self._split_training_batch(t)
+                input, target = self._split_training_batch(batch)
 
                 output, loss = self._forward_pass(input, target)
                 val_losses.update(loss.item(), self._batch_size(input))
 
                 if i % 100 == 0:
-                    #self._log_images(input, target, output, 'val_')
-                    pass
+                    self._log_images(input, target, output, 'val_')
+
                 eval_score = self.eval_criterion(output, target)
                 val_scores.update(eval_score.item(), self._batch_size(input))
+
+                # if self.sample_plotter is not None:
+                #     self.sample_plotter(i, input, output, target, 'val')
+
 
                 if self.validate_iters is not None and self.validate_iters <= i:
                     # stop validation
@@ -189,6 +242,43 @@ class UNet3DTrainer:
 
         return output, loss
 
+    def _is_best_eval_score(self, eval_score):
+        if self.eval_score_higher_is_better:
+            is_best = eval_score > self.best_eval_score
+        else:
+            is_best = eval_score < self.best_eval_score
+
+        if is_best:
+            self.logger.info(f'Saving new best evaluation metric: {eval_score}')
+            self.best_eval_score = eval_score
+
+        return is_best
+
+    def _save_checkpoint(self, is_best):
+        # remove `module` prefix from layer names when using `nn.DataParallel`
+        # see: https://discuss.pytorch.org/t/solved-keyerror-unexpected-key-module-encoder-embedding-weight-in-state-dict/1686/20
+        if isinstance(self.model, nn.DataParallel):
+            state_dict = self.model.module.state_dict()
+        else:
+            state_dict = self.model.state_dict()
+
+        utils.save_checkpoint({
+            'epoch': self.num_epoch + 1,
+            'num_iterations': self.num_iterations,
+            'model_state_dict': state_dict,
+            'best_eval_score': self.best_eval_score,
+            'eval_score_higher_is_better': self.eval_score_higher_is_better,
+            'optimizer_state_dict': self.optimizer.state_dict(),
+            'device': str(self.device),
+            'max_num_epochs': self.max_num_epochs,
+            'max_num_iterations': self.max_num_iterations,
+            'validate_after_iters': self.validate_after_iters,
+            'log_after_iters': self.log_after_iters,
+            'validate_iters': self.validate_iters,
+            'skip_train_validation': self.skip_train_validation
+        }, is_best, checkpoint_dir=self.checkpoint_dir,
+            logger=self.logger)
+
     def _log_lr(self):
         lr = self.optimizer.param_groups[0]['lr']
         self.writer.add_scalar('learning_rate', lr, self.num_iterations)
@@ -203,27 +293,61 @@ class UNet3DTrainer:
             self.writer.add_scalar(tag, value, self.num_iterations)
 
     def _log_params(self):
-        self.logger.info('Logging model parameters and gradients')
         for name, value in self.model.named_parameters():
             self.writer.add_histogram(name, value.data.cpu().numpy(), self.num_iterations)
             self.writer.add_histogram(name + '/grad', value.grad.data.cpu().numpy(), self.num_iterations)
 
-    def _log_images(self, input, target, prediction, prefix=''):
-        inputs_map = {
-            'inputs': input,
-            'targets': target,
-            'predictions': prediction}
-        img_sources = {}
-        for name, batch in inputs_map.items():
-            if isinstance(batch, list) or isinstance(batch, tuple):
-                for i, b in enumerate(batch):
-                    img_sources[f'{name}{i}'] = b.data.cpu().numpy()
-            else:
-                img_sources[name] = batch.data.cpu().numpy()
+    def _log_images(self, input, target, prediction, prefix):
+        # flair, t1, t1ce, t2 = self._split_channels(input)
+        # flair = torch.reshape(flair,(128,128,128))
+        # t1 = torch.reshape(t1,(128,128,128))
+        # t1ce = torch.reshape(t1ce,(128,128,128))
+        # t2 = torch.reshape(t2,(128,128,128))
+        # Sagittal_flair, Coronal_flair, Horizontal_flair = self._split_image(flair)
+        # Sagittal_t1, Coronal_t1, Horizontal_t1 = self._split_image(t1)
+        # Sagittal_t1ce, Coronal_t1ce, Horizontal_t1ce = self._split_image(t1ce)
+        # Sagittal_t2, Coronal_t2, Horizontal_t2 = self._split_image(t2)
+        #
+        # self.writer.add_image(prefix + "mri image-Sagittal_flair", Sagittal_flair, self.num_iterations, dataformats='CHW')
+        # self.writer.add_image(prefix + "mri image-Coronal_flair", Coronal_flair, self.num_iterations, dataformats='CHW')
+        # self.writer.add_image(prefix + "mri image-Horizontal_flair", Horizontal_flair, self.num_iterations, dataformats='CHW')
+        # self.writer.add_image(prefix + "mri image-Sagittal_t1", Sagittal_t1, self.num_iterations, dataformats='CHW')
+        # self.writer.add_image(prefix + "mri image-Coronal_t1", Coronal_t1, self.num_iterations, dataformats='CHW')
+        # self.writer.add_image(prefix + "mri image-Horizontal_t1", Horizontal_t1, self.num_iterations, dataformats='CHW')
+        # self.writer.add_image(prefix + "mri image-Sagittal_t1ce", Sagittal_t1ce, self.num_iterations, dataformats='CHW')
+        # self.writer.add_image(prefix + "mri image-Coronal_t1ce", Coronal_t1ce, self.num_iterations, dataformats='CHW')
+        # self.writer.add_image(prefix + "mri image-Horizontal_t1ce", Horizontal_t1ce, self.num_iterations, dataformats='CHW')
+        # self.writer.add_image(prefix + "mri image-Sagittal_t2", Sagittal_t2, self.num_iterations, dataformats='CHW')
+        # self.writer.add_image(prefix + "mri image-Coronal_t2", Coronal_t2, self.num_iterations, dataformats='CHW')
+        # self.writer.add_image(prefix + "mri image-Horizontal_t2", Horizontal_t2, self.num_iterations, dataformats='CHW')
 
-        for name, batch in img_sources.items():
-            for tag, image in self.tensorboard_formatter(name, batch):
-                self.writer.add_image(prefix + tag, image, self.num_iterations, dataformats='CHW')
+
+        target = torch.reshape(target,(128,128,128))
+        Sagittal_target, Coronal_target, Horizontal_target = self._split_image(target)
+        prediction = torch.reshape(prediction,(128,128,128))
+        Sagittal_pred, Coronal_pred, Horizontal_pred = self._split_image(prediction)
+
+
+        self.writer.add_image(prefix + "mri seg-Sagittal", Sagittal_target, self.num_iterations, dataformats='CHW')
+        self.writer.add_image(prefix + "mri seg-Coronal", Coronal_target, self.num_iterations, dataformats='CHW')
+        self.writer.add_image(prefix + "mri seg-Horizontal", Horizontal_target, self.num_iterations, dataformats='CHW')
+        self.writer.add_image(prefix + "net prediction-Sagittal", Sagittal_pred, self.num_iterations, dataformats='CHW')
+        self.writer.add_image(prefix + "net prediction-Coronal", Coronal_pred, self.num_iterations, dataformats='CHW')
+        self.writer.add_image(prefix + "net prediction-Horizontal" , Horizontal_pred, self.num_iterations, dataformats='CHW')
+
+
+    @staticmethod
+    def _split_channels(image):
+        return torch.chunk(image,dim=1,chunks=4)
+
+
+    @staticmethod
+    def _split_image(image):
+        Sagittal = torch.unsqueeze(image[image.shape[0] // 2], 0)
+        Coronal = torch.unsqueeze(image[:, image.shape[1] // 2], 0)
+        Horizontal = torch.unsqueeze(image[:, :, image.shape[2] // 2], 0)
+
+        return Sagittal, Coronal, Horizontal
 
     @staticmethod
     def _batch_size(input):
