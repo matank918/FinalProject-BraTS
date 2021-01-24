@@ -6,6 +6,7 @@ from scipy.ndimage import zoom
 import matplotlib.pyplot as plt
 import numpy as np
 import time
+from sklearn.preprocessing import OneHotEncoder
 
 
 class BasicDataset(Dataset):
@@ -53,7 +54,9 @@ class BasicDataset(Dataset):
                 Label 0: background
                 """
                 mask = nib.load(file).get_fdata()
-                self.seg_image = zoom(mask, (0.535, 0.535, 0.825))
+                seg_image = zoom(mask, (0.535, 0.535, 0.825), mode='nearest')
+                seg_image = self.quantize(seg_image)
+
 
             else:
                 image = nib.load(file).get_fdata()
@@ -64,10 +67,23 @@ class BasicDataset(Dataset):
                 img_list.append(image_norm)
 
         self.mri_image = np.stack(img_list, axis=0)
-        self.seg_image = torch.unsqueeze(torch.from_numpy(self.seg_image), 0)
+        self.seg_image = torch.unsqueeze(torch.from_numpy(seg_image), 0)
         self.mri_image = torch.from_numpy(self.mri_image)
         return {'mri_image': self.mri_image, 'seg': self.seg_image}
 
+    def quantize(self, data):
+        data[data < 0.5] = 0
+        data[(0.5 < data) & (data < 1.5)] = 1
+        data[(1.5 < data) & (data < 3)] = 2
+        data[3 < data] = 4
+        return data
+
+    def encode_seg(self, data):
+        num_unique_value = len(np.unique(data))
+        shape = list(data.shape)
+        shape.insert(0, num_unique_value)
+        one_hot = np.zeros(shape)
+        one_hot
     @staticmethod
     def show_image(image, name):
         """ display the differ angles of each image"""
@@ -90,6 +106,7 @@ class BasicDataset(Dataset):
 
     @staticmethod
     def histogram_image(image):
+        print("unique value:", np.unique(image))
         print("mean:", np.mean(image))
         print("var:", np.var(image))
         print("std:", np.std(image))
@@ -110,4 +127,4 @@ if __name__ == '__main__':
     item = Dataset.__getitem__(5)
     mri_image = item['mri_image'].numpy()
     print(type(mri_image))
-    seg_image = np.reshape(item['seg'].numpy(),[128,128,128])
+    seg_image = np.reshape(item['seg'].numpy(), [128, 128, 128])

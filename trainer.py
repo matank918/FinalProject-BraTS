@@ -118,7 +118,6 @@ class UNet3DTrainer:
                 input, target = self._split_training_batch(batch)
 
                 output, loss = self._forward_pass(input, target)
-                print("train loss:", loss.item())
 
                 train_losses.update(loss.item(), self._batch_size(input))
 
@@ -163,7 +162,7 @@ class UNet3DTrainer:
 
                     self._log_stats('train', train_losses.avg, train_eval_scores.avg)
                     self._log_params()
-                    # self._log_images(input, target, output, 'train_')
+                    self._log_images(input, target, output, 'train_')
 
                 if self.should_stop():
                     return True
@@ -212,11 +211,7 @@ class UNet3DTrainer:
                 eval_score = self.eval_criterion(output, target)
                 val_scores.update(eval_score.item(), self._batch_size(input))
 
-                # if self.sample_plotter is not None:
-                #     self.sample_plotter(i, input, output, target, 'val')
-
-
-                if self.validate_iters is not None and self.validate_iters <= i:
+                if i >= self.validate_iters:
                     # stop validation
                     break
 
@@ -238,6 +233,7 @@ class UNet3DTrainer:
         output = self.model(input)
 
         # compute the loss
+
         loss = self.loss_criterion(output, target)
 
         return output, loss

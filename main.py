@@ -20,7 +20,7 @@ def get_model():
 
 def get_train_loaders():
     dataset = BasicDataset(images_dir=cfg.loader_path)
-    batch_size = cfg.bath_size
+    batch_size = cfg.batch_size
     val_percent = cfg.val_percent
     n_val = int(len(dataset) * val_percent)
     n_train = len(dataset) - n_val
@@ -34,6 +34,8 @@ def get_train_loaders():
 def get_loss_criterion():
     return create_loss(cfg.loss_name)
 
+def get_eval_criterion():
+    return create_loss(cfg.eval_name)
 
 def _create_trainer(model, device, optimizer, lr_scheduler, loss_criterion, eval_criterion, loaders, logger):
     return UNet3DTrainer(model=model, logger=logger, optimizer=optimizer, loss_criterion=loss_criterion,
@@ -82,10 +84,15 @@ if __name__ == '__main__':
     loss_criterion = get_loss_criterion()
 
     # Create evaluation metric
-    eval_criterion = loss_criterion
+    eval_criterion = get_eval_criterion()
 
     # Create data loaders
     loaders = get_train_loaders()
+    # train = loaders['train']
+    # for item in train:
+    #     mri_image = item['mri_image']
+    #     seg = item['seg']
+    #     print(1)
 
     # Create the optimizer
     optimizer = _create_optimizer(model)

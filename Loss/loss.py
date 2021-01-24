@@ -34,7 +34,7 @@ class _AbstractDiceLoss(nn.Module):
         per_channel_dice = self.dice(input, target)
 
         # average Dice score across all channels/classes
-        return 1. - torch.mean(per_channel_dice)
+        return torch.mean(per_channel_dice)
 
 
 class DiceLoss(_AbstractDiceLoss):
@@ -101,13 +101,14 @@ class GeneralizedDiceLoss(_AbstractDiceLoss):
 
         return 2 * (intersect.sum() / denominator.sum())
 
+
 def create_loss(name):
-    if name == 'CrossEntropyLoss':
-        return nn.CrossEntropyLoss()
-    elif name == 'GeneralizedDiceLoss':
+    if name == 'GeneralizedDiceLoss':
         return GeneralizedDiceLoss()
     elif name == 'DiceLoss':
         return DiceLoss()
+    elif name == "CrossEntropyLoss":
+        return nn.CrossEntropyLoss()
 
 
 
@@ -115,6 +116,6 @@ if __name__ == '__main__':
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     rand_image1 = torch.rand(1, 4, 128, 128, 128).to(device)
     rand_image2 = torch.rand(1, 4, 128, 128, 128).to(device)
-    loss = GeneralizedDiceLoss()
-    t = loss(rand_image1,rand_image2)
+    loss = DiceLoss()
+    t = loss(rand_image1,rand_image1)
     print(t)
