@@ -14,8 +14,8 @@ from nnUnet3d import UNet3D
 
 
 def get_model():
-    return UNet3D(in_channels=cfg.in_channels, out_channels=cfg.out_channels, f_maps=cfg.f_maps
-                  , apply_pooling=cfg.apply_pooling, interpolate=cfg.interpolate, testing=cfg.testing)
+    return UNet3D(in_channels=cfg.in_channels, out_channels=cfg.out_channels, f_maps=cfg.f_maps,
+                  apply_pooling=cfg.apply_pooling, interpolate=cfg.interpolate, testing=cfg.testing)
 
 
 def get_train_loaders():
@@ -34,8 +34,10 @@ def get_train_loaders():
 def get_loss_criterion():
     return create_loss(cfg.loss_name)
 
+
 def get_eval_criterion():
     return create_loss(cfg.eval_name)
+
 
 def _create_trainer(model, device, optimizer, lr_scheduler, loss_criterion, eval_criterion, loaders, logger):
     return UNet3DTrainer(model=model, logger=logger, optimizer=optimizer, loss_criterion=loss_criterion,
@@ -88,11 +90,6 @@ if __name__ == '__main__':
 
     # Create data loaders
     loaders = get_train_loaders()
-    # train = loaders['train']
-    # for item in train:
-    #     mri_image = item['mri_image']
-    #     seg = item['seg']
-    #     print(1)
 
     # Create the optimizer
     optimizer = _create_optimizer(model)

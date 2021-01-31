@@ -6,7 +6,6 @@ from scipy.ndimage import zoom
 import matplotlib.pyplot as plt
 import numpy as np
 import time
-from sklearn.preprocessing import OneHotEncoder
 
 
 class BasicDataset(Dataset):
@@ -56,7 +55,13 @@ class BasicDataset(Dataset):
                 mask = nib.load(file).get_fdata()
                 seg_image = zoom(mask, (0.535, 0.535, 0.825), mode='nearest')
                 seg_image = self.quantize(seg_image)
-
+                # seg_one_hot = self.encode_seg(seg_image)
+                # ch0, ch1, ch2, ch4 = self.split_channels(seg_one_hot)
+                # self.show_image(seg_image, name)
+                # self.show_image(np.reshape(ch0, (128, 128, 128)), 'seg0')
+                # self.show_image(np.reshape(ch1, (128, 128, 128)), 'seg1')
+                # self.show_image(np.reshape(ch2, (128, 128, 128)), 'seg2')
+                # self.show_image(np.reshape(ch4, (128, 128, 128)), 'seg4')
 
             else:
                 image = nib.load(file).get_fdata()
@@ -66,9 +71,13 @@ class BasicDataset(Dataset):
                 # self.histogram_image(image_norm)
                 img_list.append(image_norm)
 
-        self.mri_image = np.stack(img_list, axis=0)
+        self.mri_image = torch.from_numpy(np.stack(img_list, axis=0))
+
         self.seg_image = torch.unsqueeze(torch.from_numpy(seg_image), 0)
-        self.mri_image = torch.from_numpy(self.mri_image)
+
+        self.mri_image = self.mri_image.type(torch.float32)
+        self.seg_image = self.seg_image.type(torch.float32)
+
         return {'mri_image': self.mri_image, 'seg': self.seg_image}
 
     def quantize(self, data):
@@ -79,16 +88,15 @@ class BasicDataset(Dataset):
         return data
 
     def encode_seg(self, data):
-        num_unique_value = len(np.unique(data))
-        shape = list(data.shape)
-        shape.insert(0, num_unique_value)
-        one_hot = np.zeros(shape)
-        one_hot
+        values = np.array([0, 1, 2, 4])
+        one_hot = np.zeros((4, 128, 128, 128))
+        for i, value in enumerate(values):
+            one_hot[i] = (data == value).astype(int)
+        return one_hot
+
     @staticmethod
     def show_image(image, name):
-        """ display the differ angles of each image"""
-        # fig, ax = plt.subplots(2, 2, figsize=(30, 30))
-
+        """display 3d image with shape of (128,128,128)"""
         fig = plt.figure()
         plt.title(name)
         ax1 = fig.add_subplot(221)
@@ -96,11 +104,11 @@ class BasicDataset(Dataset):
         ax3 = fig.add_subplot(223)
 
         ax1.title.set_text("Sagittal Section")
-        ax1.imshow(image[image.shape[0] // 2])
+        ax1.imshow(image[image.shape[0] // 2], cmap=plt.gray())
         ax2.title.set_text("Coronal  Section")
-        ax2.imshow(image[:, image.shape[1] // 2])
+        ax2.imshow(image[:, image.shape[1] // 2], cmap=plt.gray())
         ax3.title.set_text("Horizontal Section")
-        ax3.imshow(image[:, :, image.shape[2] // 2])
+        ax3.imshow(image[:, :, image.shape[2] // 2], cmap=plt.gray())
 
         plt.show()
 
@@ -120,11 +128,14 @@ class BasicDataset(Dataset):
         image = (image - np.mean(image)) / np.std(image)
         return image
 
+    @staticmethod
+    def split_channels(image):
+        return np.split(image, 4, axis=0)
+
 
 if __name__ == '__main__':
     dir = r"C:\Users\User\Documents\FinalProject\MICA BRaTS2018\Training"
     Dataset = BasicDataset(dir)
     item = Dataset.__getitem__(5)
-    mri_image = item['mri_image'].numpy()
-    print(type(mri_image))
-    seg_image = np.reshape(item['seg'].numpy(), [128, 128, 128])
+    mri_image = item['mri_image']
+    seg_image = item['seg']

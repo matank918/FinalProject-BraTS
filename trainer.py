@@ -222,9 +222,7 @@ class UNet3DTrainer:
     def _split_training_batch(self, batch):
 
         input = batch['mri_image'].to(self.device)
-        input = input.type(torch.float32)
         target = batch['seg'].to(self.device)
-        target = target.type(torch.float32)
 
         return input, target
 
@@ -294,47 +292,40 @@ class UNet3DTrainer:
             self.writer.add_histogram(name + '/grad', value.grad.data.cpu().numpy(), self.num_iterations)
 
     def _log_images(self, input, target, prediction, prefix):
-        # flair, t1, t1ce, t2 = self._split_channels(input)
-        # flair = torch.reshape(flair,(128,128,128))
-        # t1 = torch.reshape(t1,(128,128,128))
-        # t1ce = torch.reshape(t1ce,(128,128,128))
-        # t2 = torch.reshape(t2,(128,128,128))
-        # Sagittal_flair, Coronal_flair, Horizontal_flair = self._split_image(flair)
-        # Sagittal_t1, Coronal_t1, Horizontal_t1 = self._split_image(t1)
-        # Sagittal_t1ce, Coronal_t1ce, Horizontal_t1ce = self._split_image(t1ce)
-        # Sagittal_t2, Coronal_t2, Horizontal_t2 = self._split_image(t2)
+        pass
+        # ch0, ch1, ch2, ch4 = self._split_channels(target)
+        # Sagittal_ch1, Coronal_ch1, Horizontal_ch1 = self._split_image(torch.reshape(ch1,(128,128,128)))
+        # Sagittal_ch2, Coronal_ch2, Horizontal_ch2 = self._split_image(torch.reshape(ch2,(128,128,128)))
+        # Sagittal_ch4, Coronal_ch4, Horizontal_ch4 = self._split_image(torch.reshape(ch4,(128,128,128)))
         #
-        # self.writer.add_image(prefix + "mri image-Sagittal_flair", Sagittal_flair, self.num_iterations, dataformats='CHW')
-        # self.writer.add_image(prefix + "mri image-Coronal_flair", Coronal_flair, self.num_iterations, dataformats='CHW')
-        # self.writer.add_image(prefix + "mri image-Horizontal_flair", Horizontal_flair, self.num_iterations, dataformats='CHW')
-        # self.writer.add_image(prefix + "mri image-Sagittal_t1", Sagittal_t1, self.num_iterations, dataformats='CHW')
-        # self.writer.add_image(prefix + "mri image-Coronal_t1", Coronal_t1, self.num_iterations, dataformats='CHW')
-        # self.writer.add_image(prefix + "mri image-Horizontal_t1", Horizontal_t1, self.num_iterations, dataformats='CHW')
-        # self.writer.add_image(prefix + "mri image-Sagittal_t1ce", Sagittal_t1ce, self.num_iterations, dataformats='CHW')
-        # self.writer.add_image(prefix + "mri image-Coronal_t1ce", Coronal_t1ce, self.num_iterations, dataformats='CHW')
-        # self.writer.add_image(prefix + "mri image-Horizontal_t1ce", Horizontal_t1ce, self.num_iterations, dataformats='CHW')
-        # self.writer.add_image(prefix + "mri image-Sagittal_t2", Sagittal_t2, self.num_iterations, dataformats='CHW')
-        # self.writer.add_image(prefix + "mri image-Coronal_t2", Coronal_t2, self.num_iterations, dataformats='CHW')
-        # self.writer.add_image(prefix + "mri image-Horizontal_t2", Horizontal_t2, self.num_iterations, dataformats='CHW')
-
-
-        target = torch.reshape(target,(128,128,128))
-        Sagittal_target, Coronal_target, Horizontal_target = self._split_image(target)
-        prediction = torch.reshape(prediction,(128,128,128))
-        Sagittal_pred, Coronal_pred, Horizontal_pred = self._split_image(prediction)
-
-
-        self.writer.add_image(prefix + "mri seg-Sagittal", Sagittal_target, self.num_iterations, dataformats='CHW')
-        self.writer.add_image(prefix + "mri seg-Coronal", Coronal_target, self.num_iterations, dataformats='CHW')
-        self.writer.add_image(prefix + "mri seg-Horizontal", Horizontal_target, self.num_iterations, dataformats='CHW')
-        self.writer.add_image(prefix + "net prediction-Sagittal", Sagittal_pred, self.num_iterations, dataformats='CHW')
-        self.writer.add_image(prefix + "net prediction-Coronal", Coronal_pred, self.num_iterations, dataformats='CHW')
-        self.writer.add_image(prefix + "net prediction-Horizontal" , Horizontal_pred, self.num_iterations, dataformats='CHW')
+        # pred_ch0, pred_ch1, pred_ch2, pred_ch4 = self._split_channels(prediction)
+        # Sagittal_pred_ch1, Coronal_pred_ch1, Horizontal_pred_ch1 = self._split_image(torch.reshape(pred_ch1,(128,128,128)))
+        # Sagittal_pred_ch2, Coronal_pred_ch2, Horizontal_pred_ch2 = self._split_image(torch.reshape(pred_ch2,(128,128,128)))
+        # Sagittal_pred_ch4, Coronal_pred_ch4, Horizontal_pred_ch4 = self._split_image(torch.reshape(pred_ch2,(128,128,128)))
+        #
+        # self.writer.add_image(prefix + "seg-Sagittal_ch1", Sagittal_ch1, self.num_iterations, dataformats='CHW')
+        # self.writer.add_image(prefix + "seg-Coronal_ch1", Coronal_ch1, self.num_iterations, dataformats='CHW')
+        # self.writer.add_image(prefix + "seg-Horizontal_ch1", Horizontal_ch1, self.num_iterations, dataformats='CHW')
+        # self.writer.add_image(prefix + "seg-Sagittal_ch2", Sagittal_ch2, self.num_iterations, dataformats='CHW')
+        # self.writer.add_image(prefix + "seg-Coronal_ch2", Coronal_ch2, self.num_iterations, dataformats='CHW')
+        # self.writer.add_image(prefix + "seg-Horizontal_ch2", Horizontal_ch2, self.num_iterations, dataformats='CHW')
+        # self.writer.add_image(prefix + "seg-Sagittal_ch4", Sagittal_ch4, self.num_iterations, dataformats='CHW')
+        # self.writer.add_image(prefix + "seg-Coronal_ch4", Coronal_ch4, self.num_iterations, dataformats='CHW')
+        # self.writer.add_image(prefix + "seg-Horizontal_ch4", Horizontal_ch4, self.num_iterations, dataformats='CHW')
+        # self.writer.add_image(prefix + "Sagittal_pred_ch1", Sagittal_pred_ch1, self.num_iterations, dataformats='CHW')
+        # self.writer.add_image(prefix + "Coronal_pred_ch1", Coronal_pred_ch1, self.num_iterations, dataformats='CHW')
+        # self.writer.add_image(prefix + "Horizontal_pred_ch1", Horizontal_pred_ch1, self.num_iterations, dataformats='CHW')
+        # self.writer.add_image(prefix + "Sagittal_pred_ch2", Sagittal_pred_ch2, self.num_iterations, dataformats='CHW')
+        # self.writer.add_image(prefix + "Coronal_pred_ch2", Coronal_pred_ch2, self.num_iterations, dataformats='CHW')
+        # self.writer.add_image(prefix + "Horizontal_pred_ch2", Horizontal_pred_ch2, self.num_iterations, dataformats='CHW')
+        # self.writer.add_image(prefix + "Sagittal_pred_ch4", Sagittal_pred_ch4, self.num_iterations, dataformats='CHW')
+        # self.writer.add_image(prefix + "Coronal_pred_ch4", Coronal_pred_ch4, self.num_iterations, dataformats='CHW')
+        # self.writer.add_image(prefix + "Horizontal_pred_ch4", Horizontal_pred_ch4, self.num_iterations, dataformats='CHW')
 
 
     @staticmethod
     def _split_channels(image):
-        return torch.chunk(image,dim=1,chunks=4)
+        return torch.chunk(image, dim=1,chunks=4)
 
 
     @staticmethod
