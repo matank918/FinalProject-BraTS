@@ -55,7 +55,6 @@ class DiceLoss(_AbstractDiceLoss):
              input (torch.Tensor): NxCxSpatial input tensor
              target (torch.Tensor): NxCxSpatial target tensor
              epsilon (float): prevents division by zero
-             weight (torch.Tensor): Cx1 tensor of weight per channel/class
         """
 
         # input and target shapes must match
@@ -66,10 +65,10 @@ class DiceLoss(_AbstractDiceLoss):
         target = target.float()
 
         # compute per channel Dice Coefficient
-        intersect = (input * target).sum(-1)
+        intersect = 2 * (input * target).sum(-1)
 
-        denominator = (input * input).sum(-1) + (target * target).sum(-1)
-        result = 2 * (intersect / denominator.clamp(min=epsilon))
+        denominator = input.sum(-1) + target.sum(-1)
+        result = (intersect + epsilon) / (denominator + epsilon)
         return result
 
 
@@ -80,11 +79,10 @@ def create_loss(name):
         return nn.CrossEntropyLoss()
 
 
-
 if __name__ == '__main__':
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    rand_image1 = torch.rand(1, 4, 128, 128, 128).to(device)
-    rand_image2 = torch.rand(1, 4, 128, 128, 128).to(device)
+    rand_image1 = torch.empty(1, 1, 128, 128, 128).random_(2)
+    # rand_image2 = torch.empty(1, 1, 128, 128, 128).to(device)
     loss = DiceLoss()
-    t = loss(rand_image1,rand_image1)
+    t = loss(rand_image1, rand_image1)
     print(t)

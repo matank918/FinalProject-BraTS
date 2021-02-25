@@ -55,7 +55,7 @@ class BasicDataset(Dataset):
                 mask = nib.load(file).get_fdata()
                 seg_image = zoom(mask, (0.535, 0.535, 0.825), mode='nearest')
                 seg_image = self.quantize(seg_image)
-                # seg_one_hot = self.encode_seg(seg_image)
+                seg_one_hot = self.encode_seg(seg_image)
                 # ch0, ch1, ch2, ch4 = self.split_channels(seg_one_hot)
                 # self.show_image(seg_image, name)
                 # self.show_image(np.reshape(ch0, (128, 128, 128)), 'seg0')
@@ -73,8 +73,8 @@ class BasicDataset(Dataset):
 
         self.mri_image = torch.from_numpy(np.stack(img_list, axis=0))
 
-        self.seg_image = torch.unsqueeze(torch.from_numpy(seg_image), 0)
-
+        # self.seg_image = torch.unsqueeze(torch.from_numpy(seg_image), 0)
+        self.seg_image = torch.from_numpy(seg_one_hot)
         self.mri_image = self.mri_image.type(torch.float32)
         self.seg_image = self.seg_image.type(torch.float32)
 

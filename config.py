@@ -7,7 +7,7 @@ Created on Wed May 27 17:19:37 2020
 #model
 model_name = 'UNet3D'
 in_channels = 4
-out_channels = 1
+out_channels = 4
 f_maps = [32, 64, 128, 256, 320, 320]
 apply_pooling = False
 interpolate = True
@@ -34,11 +34,11 @@ gamma = 0.1
 #train
 num_epoch = 0
 validate_after_iters = 10
-validate_iters = 3
-log_after_iters = 10
+validate_iters = 20
+log_after_iters = 30
 max_num_epochs = 10
 eval_score_higher_is_better = False
-skip_train_validation = False
+skip_train_validation = True
 num_iterations = 1
 checkpoint_dir = r'C:\Users\User\Documents\FinalProject\FinalProject-BraTS'
 max_num_iterations = 3000
