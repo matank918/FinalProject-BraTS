@@ -81,10 +81,10 @@ class Abstract3DUNet(nn.Module):
 
 
 class UNet3D(Abstract3DUNet):
-    def __init__(self, in_channels, out_channels, f_maps, apply_pooling, interpolate, testing):
+    def __init__(self, in_channels, out_channels, f_maps, apply_pooling, interpolate, testing, basic_module):
         super(UNet3D, self).__init__(in_channels=in_channels, out_channels=out_channels,
                                      f_maps=f_maps, apply_pooling=apply_pooling,
-                                     interpolate=interpolate,testing=testing)
+                                     interpolate=interpolate,testing=testing, basic_module=basic_module)
 
 
 if __name__ == '__main__':

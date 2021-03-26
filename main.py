@@ -1,5 +1,4 @@
 import importlib
-
 import torch
 import torch.nn as nn
 from utils import get_logger
@@ -9,13 +8,17 @@ from trainer import UNet3DTrainer
 from torch.utils.data import DataLoader, random_split
 from CustomDataSet import BasicDataset
 from loss import create_loss
+from metrics import create_eval
 import config as cfg
-from nnUnet3d import UNet3D
+from nnUnet.nnUnet3d import UNet3D
 
 
 def get_model():
+    module = importlib.import_module(cfg.module_name)
+    basic_block = getattr(module, cfg.basic_block)
     return UNet3D(in_channels=cfg.in_channels, out_channels=cfg.out_channels, f_maps=cfg.f_maps,
-                  apply_pooling=cfg.apply_pooling, interpolate=cfg.interpolate, testing=cfg.testing)
+                  apply_pooling=cfg.apply_pooling, interpolate=cfg.interpolate, testing=cfg.testing
+                  ,basic_module=basic_block)
 
 
 def get_train_loaders():
@@ -24,7 +27,7 @@ def get_train_loaders():
     n_train = len(dataset) - n_val
     train, val = random_split(dataset, [n_train, n_val])
     train_loader = DataLoader(train, batch_size=cfg.batch_size, shuffle=True, num_workers=8, pin_memory=True)
-    val_loader = DataLoader(val, batch_size=batch_size, shuffle=False, num_workers=8, pin_memory=True, drop_last=True)
+    val_loader = DataLoader(val, batch_size=cfg.batch_size, shuffle=False, num_workers=8, pin_memory=True, drop_last=True)
     loader_dict = {'train': train_loader, 'val': val_loader}
     return loader_dict
 
@@ -34,7 +37,7 @@ def get_loss_criterion():
 
 
 def get_eval_criterion():
-    return create_loss(cfg.eval_name)
+    return create_eval(cfg.eval_name)
 
 
 def _create_trainer(model, device, optimizer, lr_scheduler, loss_criterion, eval_criterion, loaders, logger):
@@ -52,7 +55,7 @@ def _create_trainer(model, device, optimizer, lr_scheduler, loss_criterion, eval
 
 
 def _create_optimizer(model):
-    return optim.Adam(model.parameters(), lr=cfg.learning_rate, weight_decay=cfg.weight_decay)
+    return optim.SGD(model.parameters(), lr=cfg.learning_rate, momentum=cfg.momentum, nesterov=cfg.nesterov)
 
 
 def _create_lr_scheduler(optimizer):
@@ -93,7 +96,7 @@ if __name__ == '__main__':
     optimizer = _create_optimizer(model)
 
     # Create learning rate adjustment strategy
-    lr_scheduler = _create_lr_scheduler(optimizer)
+    lr_scheduler = None
 
     # Create model trainer
     trainer = _create_trainer(model=model, optimizer=optimizer, device=device, logger=logger,

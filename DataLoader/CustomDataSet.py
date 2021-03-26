@@ -5,9 +5,9 @@ import numpy as np
 from torchvision import transforms
 from DataLoader.CustomTransformations import RandomCrop3D, LoadData, OneHotEncoding3d, ToTensor, CustomNormalize
 
-class BasicDataset(Dataset):
 
-    def __init__(self, images_dir, transforms=None, net_dim =(128,128,128)):
+class BasicDataset(Dataset):
+    def __init__(self, images_dir, transforms=None, net_dim=(128, 128, 128)):
         """:param images_dir: (str)"""
 
         self.dir = images_dir
@@ -34,11 +34,10 @@ class BasicDataset(Dataset):
     def __getitem__(self, i):
         data, label = self.load_data(self.folder_names[i])
         data, label = self.basic_transform(data, label)
-
         return data, label
 
     def basic_transform(self, data, label):
-        one_hot = OneHotEncoding3d(np.unique(label),label.shape)
+        one_hot = OneHotEncoding3d(label.shape)
         rand_crop = RandomCrop3D(data.shape, self.net_dim)
         to_tensor = ToTensor()
         normalize = CustomNormalize()
@@ -51,7 +50,6 @@ if __name__ == '__main__':
     transformations = transforms.Compose([ToTensor()])
     Dataset = BasicDataset(dir, transformations)
     data, label = Dataset.__getitem__(5)
-
 
     """In seg file
     Label 1: necrotic and non-enhancing tumor

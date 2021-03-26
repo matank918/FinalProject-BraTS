@@ -4,11 +4,10 @@ from torch import nn as nn
 from torch.autograd import Variable
 from utils import flatten
 
-class _AbstractDiceLoss(nn.Module):
-    """Base class for different implementations of Dice loss."""
 
+class _AbstractDiceMetric(nn.Module):
     def __init__(self):
-        super(_AbstractDiceLoss, self).__init__()
+        super(_AbstractDiceMetric, self).__init__()
 
     def dice(self, input, target):
         # actual Dice score computation; to be implemented by the subclass
@@ -19,11 +18,10 @@ class _AbstractDiceLoss(nn.Module):
         per_channel_dice = self.dice(input, target)
 
         # average Dice score across all channels/classes
-        return 1 - torch.mean(per_channel_dice)
+        return torch.mean(per_channel_dice)
 
 
-class DiceLoss(_AbstractDiceLoss):
-    """Computes Dice Loss according to https://arxiv.org/abs/1606.04797"""
+class DiceMetric(_AbstractDiceMetric):
     def __init__(self):
         super().__init__()
 
@@ -32,15 +30,6 @@ class DiceLoss(_AbstractDiceLoss):
 
     @staticmethod
     def compute_per_channel_dice(input, target, epsilon=1e-6):
-        """
-        Computes DiceCoefficient as defined in https://arxiv.org/abs/1606.04797 given  a multi channel input and target.
-        Assumes the input is a normalized probability, e.g. a result of Sigmoid or Softmax function.
-        Args:
-             input (torch.Tensor): NxCxSpatial input tensor
-             target (torch.Tensor): NxCxSpatial target tensor
-             epsilon (float): prevents division by zero
-        """
-
         # input and target shapes must match
         assert input.size() == target.size(), "'input' and 'target' must have the same shape"
 
@@ -56,17 +45,6 @@ class DiceLoss(_AbstractDiceLoss):
         return result
 
 
-def create_loss(name):
-    if name == 'DiceLoss':
-        return DiceLoss()
-    elif name == "CrossEntropyLoss":
-        return nn.CrossEntropyLoss()
-
-
-if __name__ == '__main__':
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    rand_image1 = torch.empty(1, 1, 128, 128, 128).random_(2)
-    # rand_image2 = torch.empty(1, 1, 128, 128, 128).to(device)
-    loss = DiceLoss()
-    t = loss(rand_image1, rand_image1)
-    print(t)
+def create_eval(name):
+    if name == 'DiceMetric':
+        return DiceMetric()

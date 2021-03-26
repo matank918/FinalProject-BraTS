@@ -6,29 +6,27 @@ from torchvision import transforms
 
 
 class LoadData(object):
-    def __init__(self):
-        self.images = []
-        self.seg = None
 
     def __call__(self, file_dir):
+        images = []
+
         self.files_list = [os.path.join(file_dir, dI) for dI in os.listdir(file_dir)]
 
         for file in self.files_list:
             if 'seg' in file:
-                self.seg = nib.load(file).get_fdata()
-
+                seg = nib.load(file).get_fdata()
             else:
                 image = (nib.load(file).get_fdata())
-                self.images.append(image)
+                images.append(image)
 
-        self.images = np.stack(self.images, axis=0)
+        images = np.stack(images, axis=0)
 
-        return self.images, self.seg
+        return images, seg
 
 
 class OneHotEncoding3d(object):
-    def __init__(self, values, dim):
-        self.values = values
+    def __init__(self, dim):
+        self.values = np.array([0, 1, 2, 4])
         self.one_hot = np.zeros((len(self.values),) + dim)
 
     def __call__(self, label):

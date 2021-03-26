@@ -9,6 +9,7 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 import utils
 import time
 
+
 class UNet3DTrainer:
     """3D UNet trainer.
       Args:
@@ -70,7 +71,6 @@ class UNet3DTrainer:
         self.num_epoch = num_epoch
         self.skip_train_validation = skip_train_validation
 
-
         self.logger.info(model)
         logger.info(f'eval_score_higher_is_better: {eval_score_higher_is_better}')
 
@@ -112,62 +112,63 @@ class UNet3DTrainer:
         self.model.train()
         for batch in self.loaders['train']:
 
-                self.logger.info(f'Training iteration [{self.num_iterations}/{self.max_num_iterations}]. '
-                        f'Epoch [{self.num_epoch}/{self.max_num_epochs}]')
+            self.logger.info(f'Training iteration [{self.num_iterations}/{self.max_num_iterations}]. '
+                             f'Epoch [{self.num_epoch}/{self.max_num_epochs}]')
 
-                input, target = self._split_training_batch(batch)
+            input, target = self._split_training_batch(batch)
 
-                output, loss = self._forward_pass(input, target)
+            output, loss = self._forward_pass(input, target)
 
-                train_losses.update(loss.item(), self._batch_size(input))
+            train_losses.update(loss.item(), self._batch_size(input))
 
-                # compute gradients and update parameters
-                self.optimizer.zero_grad()
-                loss.backward()
-                self.optimizer.step()
+            # compute gradients and update parameters
+            self.optimizer.zero_grad()
+            loss.backward()
+            self.optimizer.step()
 
-                if self.num_iterations % self.validate_after_iters == 0:
-                    # set the model in eval mode
-                    self.model.eval()
-                    # evaluate on validation set
-                    eval_score = self.validate()
-                    # set the model back to training mode
-                    self.model.train()
+            if self.num_iterations % self.validate_after_iters == 0:
+                # set the model in eval mode
+                self.model.eval()
+                # evaluate on validation set
+                eval_score = self.validate()
+                # set the model back to training mode
+                self.model.train()
 
-                    # adjust learning rate if necessary
+                # adjust learning rate if necessary
+                if self.scheduler is not None:
                     if isinstance(self.scheduler, ReduceLROnPlateau):
                         self.scheduler.step(eval_score)
                     else:
                         self.scheduler.step()
 
-                    # log current learning rate in tensorboard
-                    self._log_lr()
+                # log current learning rate in tensorboard
+                self._log_lr()
 
-                    # remember best validation metric
-                    is_best = self._is_best_eval_score(eval_score)
+                # remember best validation metric
+                is_best = self._is_best_eval_score(eval_score)
 
-                    # save checkpoint
-                    self._save_checkpoint(is_best)
+                # save checkpoint
+                self._save_checkpoint(is_best)
 
-                if self.num_iterations % self.log_after_iters == 0:
+            if self.num_iterations % self.log_after_iters == 0:
 
-                    # compute eval criterion
-                    if not self.skip_train_validation:
-                        eval_score = self.eval_criterion(output, target)
-                        train_eval_scores.update(eval_score.item(), self._batch_size(input))
+                # compute eval criterion
+                if not self.skip_train_validation:
+                    eval_score = self.eval_criterion(output, target)
+                    train_eval_scores.update(eval_score.item(), self._batch_size(input))
 
-                    # log stats, params and images
-                    self.logger.info(
-                        f'Training stats. Loss: {train_losses.avg}. Evaluation score: {train_eval_scores.avg}')
+                # log stats, params and images
+                self.logger.info(
+                    f'Training stats. Loss: {train_losses.avg}. Evaluation score: {train_eval_scores.avg}')
 
-                    self._log_stats('train', train_losses.avg, train_eval_scores.avg)
-                    self._log_params()
-                    self._log_images(input, target, output, 'train_')
+                self._log_stats('train', train_losses.avg, train_eval_scores.avg)
+                self._log_params()
+                # self._log_images(input, target, output, 'train_')
 
-                if self.should_stop():
-                    return True
-                print("time for one iteration:", time.time()-time_now)
-                self.num_iterations += 1
+            if self.should_stop():
+                return True
+            print("time for one iteration:", time.time() - time_now)
+            self.num_iterations += 1
 
         return False
 
@@ -192,7 +193,6 @@ class UNet3DTrainer:
     def validate(self):
 
         self.logger.info('Validating...')
-
 
         val_losses = RunningAverage()
         val_scores = RunningAverage()
@@ -220,9 +220,9 @@ class UNet3DTrainer:
             return val_scores.avg
 
     def _split_training_batch(self, batch):
-
-        input = batch['mri_image'].to(self.device)
-        target = batch['seg'].to(self.device)
+        input, target = batch
+        input = input.to(self.device)
+        target = target.to(self.device)
 
         return input, target
 
@@ -231,7 +231,6 @@ class UNet3DTrainer:
         output = self.model(input)
 
         # compute the loss
-
         loss = self.loss_criterion(output, target)
 
         return output, loss
@@ -292,41 +291,39 @@ class UNet3DTrainer:
             self.writer.add_histogram(name + '/grad', value.grad.data.cpu().numpy(), self.num_iterations)
 
     def _log_images(self, input, target, prediction, prefix):
-        pass
-        # ch0, ch1, ch2, ch4 = self._split_channels(target)
-        # Sagittal_ch1, Coronal_ch1, Horizontal_ch1 = self._split_image(torch.reshape(ch1,(128,128,128)))
-        # Sagittal_ch2, Coronal_ch2, Horizontal_ch2 = self._split_image(torch.reshape(ch2,(128,128,128)))
-        # Sagittal_ch4, Coronal_ch4, Horizontal_ch4 = self._split_image(torch.reshape(ch4,(128,128,128)))
-        #
-        # pred_ch0, pred_ch1, pred_ch2, pred_ch4 = self._split_channels(prediction)
-        # Sagittal_pred_ch1, Coronal_pred_ch1, Horizontal_pred_ch1 = self._split_image(torch.reshape(pred_ch1,(128,128,128)))
-        # Sagittal_pred_ch2, Coronal_pred_ch2, Horizontal_pred_ch2 = self._split_image(torch.reshape(pred_ch2,(128,128,128)))
-        # Sagittal_pred_ch4, Coronal_pred_ch4, Horizontal_pred_ch4 = self._split_image(torch.reshape(pred_ch2,(128,128,128)))
-        #
-        # self.writer.add_image(prefix + "seg-Sagittal_ch1", Sagittal_ch1, self.num_iterations, dataformats='CHW')
-        # self.writer.add_image(prefix + "seg-Coronal_ch1", Coronal_ch1, self.num_iterations, dataformats='CHW')
-        # self.writer.add_image(prefix + "seg-Horizontal_ch1", Horizontal_ch1, self.num_iterations, dataformats='CHW')
-        # self.writer.add_image(prefix + "seg-Sagittal_ch2", Sagittal_ch2, self.num_iterations, dataformats='CHW')
-        # self.writer.add_image(prefix + "seg-Coronal_ch2", Coronal_ch2, self.num_iterations, dataformats='CHW')
-        # self.writer.add_image(prefix + "seg-Horizontal_ch2", Horizontal_ch2, self.num_iterations, dataformats='CHW')
-        # self.writer.add_image(prefix + "seg-Sagittal_ch4", Sagittal_ch4, self.num_iterations, dataformats='CHW')
-        # self.writer.add_image(prefix + "seg-Coronal_ch4", Coronal_ch4, self.num_iterations, dataformats='CHW')
-        # self.writer.add_image(prefix + "seg-Horizontal_ch4", Horizontal_ch4, self.num_iterations, dataformats='CHW')
-        # self.writer.add_image(prefix + "Sagittal_pred_ch1", Sagittal_pred_ch1, self.num_iterations, dataformats='CHW')
-        # self.writer.add_image(prefix + "Coronal_pred_ch1", Coronal_pred_ch1, self.num_iterations, dataformats='CHW')
-        # self.writer.add_image(prefix + "Horizontal_pred_ch1", Horizontal_pred_ch1, self.num_iterations, dataformats='CHW')
-        # self.writer.add_image(prefix + "Sagittal_pred_ch2", Sagittal_pred_ch2, self.num_iterations, dataformats='CHW')
-        # self.writer.add_image(prefix + "Coronal_pred_ch2", Coronal_pred_ch2, self.num_iterations, dataformats='CHW')
-        # self.writer.add_image(prefix + "Horizontal_pred_ch2", Horizontal_pred_ch2, self.num_iterations, dataformats='CHW')
-        # self.writer.add_image(prefix + "Sagittal_pred_ch4", Sagittal_pred_ch4, self.num_iterations, dataformats='CHW')
-        # self.writer.add_image(prefix + "Coronal_pred_ch4", Coronal_pred_ch4, self.num_iterations, dataformats='CHW')
-        # self.writer.add_image(prefix + "Horizontal_pred_ch4", Horizontal_pred_ch4, self.num_iterations, dataformats='CHW')
 
+        _, ch1, ch2, ch4 = self._split_channels(target)
+        Sagittal_ch1, Coronal_ch1, Horizontal_ch1 = self._split_image(torch.reshape(ch1,(128,128,128)))
+        Sagittal_ch2, Coronal_ch2, Horizontal_ch2 = self._split_image(torch.reshape(ch2,(128,128,128)))
+        Sagittal_ch4, Coronal_ch4, Horizontal_ch4 = self._split_image(torch.reshape(ch4,(128,128,128)))
+
+        _, pred_ch1, pred_ch2, pred_ch4 = self._split_channels(prediction)
+        Sagittal_pred_ch1, Coronal_pred_ch1, Horizontal_pred_ch1 = self._split_image(torch.reshape(pred_ch1,(128,128,128)))
+        Sagittal_pred_ch2, Coronal_pred_ch2, Horizontal_pred_ch2 = self._split_image(torch.reshape(pred_ch2,(128,128,128)))
+        Sagittal_pred_ch4, Coronal_pred_ch4, Horizontal_pred_ch4 = self._split_image(torch.reshape(pred_ch2,(128,128,128)))
+
+        self.writer.add_image(prefix + "seg_Sagittal_ch1", Sagittal_ch1, self.num_iterations, dataformats='CHW')
+        self.writer.add_image(prefix + "seg_Coronal_ch1", Coronal_ch1, self.num_iterations, dataformats='CHW')
+        self.writer.add_image(prefix + "seg_Horizontal_ch1", Horizontal_ch1, self.num_iterations, dataformats='CHW')
+        self.writer.add_image(prefix + "seg_Sagittal_ch2", Sagittal_ch2, self.num_iterations, dataformats='CHW')
+        self.writer.add_image(prefix + "seg_Coronal_ch2", Coronal_ch2, self.num_iterations, dataformats='CHW')
+        self.writer.add_image(prefix + "seg_Horizontal_ch2", Horizontal_ch2, self.num_iterations, dataformats='CHW')
+        self.writer.add_image(prefix + "seg_Sagittal_ch4", Sagittal_ch4, self.num_iterations, dataformats='CHW')
+        self.writer.add_image(prefix + "seg_Coronal_ch4", Coronal_ch4, self.num_iterations, dataformats='CHW')
+        self.writer.add_image(prefix + "seg_Horizontal_ch4", Horizontal_ch4, self.num_iterations, dataformats='CHW')
+        self.writer.add_image(prefix + "pred_Sagittal_ch1", Sagittal_pred_ch1, self.num_iterations, dataformats='CHW')
+        self.writer.add_image(prefix + "pred_Coronal_ch1", Coronal_pred_ch1, self.num_iterations, dataformats='CHW')
+        self.writer.add_image(prefix + "pred_Horizontal_ch1", Horizontal_pred_ch1, self.num_iterations, dataformats='CHW')
+        self.writer.add_image(prefix + "pred_Sagittal_ch2", Sagittal_pred_ch2, self.num_iterations, dataformats='CHW')
+        self.writer.add_image(prefix + "pred_Coronal_ch2", Coronal_pred_ch2, self.num_iterations, dataformats='CHW')
+        self.writer.add_image(prefix + "pred_Horizontal_ch2", Horizontal_pred_ch2, self.num_iterations, dataformats='CHW')
+        self.writer.add_image(prefix + "pred_Sagittal_ch4", Sagittal_pred_ch4, self.num_iterations, dataformats='CHW')
+        self.writer.add_image(prefix + "pred_Coronal_ch4", Coronal_pred_ch4, self.num_iterations, dataformats='CHW')
+        self.writer.add_image(prefix + "pred_Horizontal_ch4", Horizontal_pred_ch4, self.num_iterations, dataformats='CHW')
 
     @staticmethod
     def _split_channels(image):
-        return torch.chunk(image, dim=1,chunks=4)
-
+        return torch.chunk(image, dim=1, chunks=4)
 
     @staticmethod
     def _split_image(image):
