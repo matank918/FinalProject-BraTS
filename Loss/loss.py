@@ -56,17 +56,34 @@ class DiceLoss(_AbstractDiceLoss):
         return result
 
 
+class CustomBCELoss(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.loss = nn.BCELoss()
+
+    def forward(self, input, target):
+        input = flatten(input)
+        target = flatten(target)
+        return self.loss(input, target)
+
+
 def create_loss(name):
     if name == 'DiceLoss':
         return DiceLoss()
-    elif name == "CrossEntropyLoss":
-        return nn.CrossEntropyLoss()
+    elif name == "BCELoss":
+        return CustomBCELoss()
 
 
 if __name__ == '__main__':
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    rand_image1 = torch.empty(1, 1, 128, 128, 128).random_(2)
-    # rand_image2 = torch.empty(1, 1, 128, 128, 128).to(device)
-    loss = DiceLoss()
-    t = loss(rand_image1, rand_image1)
-    print(t)
+
+    m = nn.Softmax(dim=2)
+    input = torch.randn(2, 2, 2)
+    output = m(input)
+    t = output[0]
+
+    # rand_image1 = torch.randn(4, 2, 128, 128, 128, requires_grad=True)
+    # rand_image2 = torch.empty(4, 128, 128, 128, dtype=torch.long).random_(2)
+    # loss = nn.CrossEntropyLoss()
+    # t = loss(rand_image1, rand_image2)
+    # print(t)

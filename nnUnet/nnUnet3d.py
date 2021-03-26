@@ -3,22 +3,19 @@ import torch
 import torch.nn as nn
 from UnetParts import Encoder, Decoder
 from BuildingBlocks import DoubleConv, SingleConv
-from utils import get_number_of_learnable_parameters, correct_type
+from utils import get_number_of_learnable_parameters
 
 class Abstract3DUNet(nn.Module):
 
-    def __init__(self, in_channels, out_channels, f_maps, apply_pooling, interpolate,testing, basic_module=DoubleConv):
+    def __init__(self, in_channels, out_channels, f_maps, apply_pooling, interpolate, basic_module=DoubleConv):
         """
           Args:
               :param in_channels:(int) number of input channels
               :param out_channels: (int) number of output segmentation masks;
               :param f_maps: (list) number of feature maps at each level of the encoder
               :param basic_module: (nn.Module) the base module for the net (default is DoubleConv)
-              :param testing: (bool) if True we are at testing mode, if False we are at training mode
           """
         super(Abstract3DUNet, self).__init__()
-
-        self.testing = testing
 
         # create encoder path consisting of Encoder modules. Depth of the encoder is equal to `len(f_maps)`
         encoders = []
@@ -46,11 +43,10 @@ class Abstract3DUNet(nn.Module):
         self.decoders = nn.ModuleList(decoders)
 
         # activation function
-        if self.testing:
-            self.final_activation = nn.Softmax(dim=1)
+        self.final_activation = nn.Softmax(dim=1)
 
         # final Double conv
-        self.final_conv = basic_module(f_maps[0], out_channels, 1)
+        self.final_conv = nn.Conv3d(f_maps[0], out_channels, 1, stride=1, padding=0)
 
     def forward(self, x):
         # encoder part
@@ -68,30 +64,28 @@ class Abstract3DUNet(nn.Module):
         for i, (decoder, encoder_features) in enumerate(zip(self.decoders, encoders_features)):
             # pass the output from the corresponding encoder and the output of the previous decoder
             x = decoder(encoder_features, x)
-            if i > 0 and self.testing and self.final_activation is not None:
+            if i > 0:
                 x = self.final_activation(x)
             # print("decoder:", x.size())
 
         x = self.final_conv(x)
-
-        if self.testing and self.final_activation is not None:
-            x = self.final_activation(x)
+        x = self.final_activation(x)
 
         return x
 
 
 class UNet3D(Abstract3DUNet):
-    def __init__(self, in_channels, out_channels, f_maps, apply_pooling, interpolate, testing, basic_module):
+    def __init__(self, in_channels, out_channels, f_maps, apply_pooling, interpolate, basic_module):
         super(UNet3D, self).__init__(in_channels=in_channels, out_channels=out_channels,
                                      f_maps=f_maps, apply_pooling=apply_pooling,
-                                     interpolate=interpolate,testing=testing, basic_module=basic_module)
+                                     interpolate=interpolate, basic_module=basic_module)
 
 
 if __name__ == '__main__':
     torch.cuda.empty_cache()
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    f_maps = [32, 64, 128, 256]
-    model = UNet3D(4, 4, f_maps, interpolate=True,apply_pooling=False,testing=False)
+    f_maps = [32, 64, 128, 256, 320, 320]
+    model = UNet3D(4, 4, f_maps, interpolate=True, apply_pooling=False, basic_module=DoubleConv)
     model.to(device)
     rand_image = torch.rand(1, 4, 128, 128, 128).to(device)
     print(get_number_of_learnable_parameters(model))

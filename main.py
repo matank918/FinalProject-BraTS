@@ -1,14 +1,14 @@
 import importlib
 import torch
 import torch.nn as nn
-from utils import get_logger
 import torch.optim as optim
-from utils import get_number_of_learnable_parameters, correct_type
-from trainer import UNet3DTrainer
 from torch.utils.data import DataLoader, random_split
-from CustomDataSet import BasicDataset
-from loss import create_loss
-from metrics import create_eval
+
+from utils import get_number_of_learnable_parameters, get_logger
+from trainer import UNet3DTrainer
+from DataLoader.CustomDataSet import BasicDataset
+from Loss.loss import create_loss
+from Loss.metrics import create_eval
 import config as cfg
 from nnUnet.nnUnet3d import UNet3D
 
@@ -17,7 +17,7 @@ def get_model():
     module = importlib.import_module(cfg.module_name)
     basic_block = getattr(module, cfg.basic_block)
     return UNet3D(in_channels=cfg.in_channels, out_channels=cfg.out_channels, f_maps=cfg.f_maps,
-                  apply_pooling=cfg.apply_pooling, interpolate=cfg.interpolate, testing=cfg.testing
+                  apply_pooling=cfg.apply_pooling, interpolate=cfg.interpolate
                   ,basic_module=basic_block)
 
 
@@ -71,6 +71,7 @@ if __name__ == '__main__':
     model = get_model()
 
     # use DataParallel if more than 1 GPU available
+
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     if torch.cuda.device_count() > 1 and not device.type == 'cpu':
         model = nn.DataParallel(model)

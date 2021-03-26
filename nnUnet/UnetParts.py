@@ -40,6 +40,7 @@ class Decoder(nn.Module):
       """
     def __init__(self, conv_trans_channels, in_channels, out_channels, basic_module=DoubleConv, interpolate=False):
         super().__init__()
+        self.final_conv = nn.Conv3d(out_channels, out_channels, kernel_size=1)
         if interpolate:
             self.Upsample = partial(self._interpolate, mode='nearest')
         else:
@@ -52,7 +53,8 @@ class Decoder(nn.Module):
         output_size = encoder_features.size()[2:]
         x1 = self.Upsample(x1, output_size)
         x = torch.cat([encoder_features, x1], dim=1)
-        return self.basic_module(x)
+        x = self.basic_module(x)
+        return self.final_conv(x)
 
     @staticmethod
     def _interpolate(x, size, mode):

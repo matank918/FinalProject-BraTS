@@ -13,10 +13,11 @@ out_channels = 4
 f_maps = [32, 64, 128, 256, 320, 320]
 apply_pooling = False
 interpolate = True
-testing = False
+testing = True
 
 #loss and eveal
 loss_name = 'DiceLoss'
+# loss_name = 'BCELoss'
 eval_name = 'DiceMetric'
 
 #loader
@@ -25,8 +26,7 @@ val_percent = 0.1
 batch_size = 1
 
 #optimizer
-learning_rate = 0.01
-weight_decay = 0.1
+learning_rate = 0.1
 momentum = 0.99
 nesterov = True
 # scheduler
@@ -35,7 +35,7 @@ gamma = 0.1
 
 
 #train
-num_epoch = 0
+num_epoch = 1
 validate_after_iters = 10
 validate_iters = 20
 log_after_iters = 30

@@ -21,18 +21,6 @@ def flatten(tensor):
     return transposed.contiguous().view(C, -1)
 
 
-def correct_type(string_dict):
-    correct_dict={}
-    for key,value in string_dict.items():
-        try:
-            correct_dict[key] = ast.literal_eval(value)
-        except ValueError:
-            correct_dict[key] = value
-        except SyntaxError:
-            correct_dict[key] = value
-    return correct_dict
-
-
 class RunningAverage:
     """Computes and stores the average
     """
@@ -46,7 +34,6 @@ class RunningAverage:
         self.count += n
         self.sum += value * n
         self.avg = self.sum / self.count
-
 
 
 def get_logger(name, level=logging.DEBUG):
