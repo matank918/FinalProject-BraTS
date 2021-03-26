@@ -7,7 +7,7 @@ import torch.optim as optim
 from utils import get_number_of_learnable_parameters, correct_type
 from trainer import UNet3DTrainer
 from torch.utils.data import DataLoader, random_split
-from BasicDataSet import BasicDataset
+from CustomDataSet import BasicDataset
 from loss import create_loss
 import config as cfg
 from nnUnet3d import UNet3D
@@ -20,12 +20,10 @@ def get_model():
 
 def get_train_loaders():
     dataset = BasicDataset(images_dir=cfg.loader_path)
-    batch_size = cfg.batch_size
-    val_percent = cfg.val_percent
-    n_val = int(len(dataset) * val_percent)
+    n_val = int(len(dataset) * cfg.val_percent)
     n_train = len(dataset) - n_val
     train, val = random_split(dataset, [n_train, n_val])
-    train_loader = DataLoader(train, batch_size=batch_size, shuffle=True, num_workers=8, pin_memory=True)
+    train_loader = DataLoader(train, batch_size=cfg.batch_size, shuffle=True, num_workers=8, pin_memory=True)
     val_loader = DataLoader(val, batch_size=batch_size, shuffle=False, num_workers=8, pin_memory=True, drop_last=True)
     loader_dict = {'train': train_loader, 'val': val_loader}
     return loader_dict
