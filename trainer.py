@@ -4,9 +4,8 @@ import torch
 import torch.nn as nn
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
-from utils import RunningAverage
+from utils import RunningAverage, save_checkpoint, split_image, split_channels
 from torch.optim.lr_scheduler import ReduceLROnPlateau
-import utils
 import time
 
 
@@ -100,7 +99,7 @@ class UNet3DTrainer:
 
         train_losses = RunningAverage()
         train_eval_scores = RunningAverage()
-        time_now = time.time()
+        # time_now = time.time()
         # sets the model in training mode
         self.model.train()
         for batch in self.loaders['train']:
@@ -162,7 +161,6 @@ class UNet3DTrainer:
             if self.should_stop():
                 return True
 
-            print("time for one iteration:", time.time() - time_now)
             self.num_iterations += 1
 
         return False
@@ -251,7 +249,7 @@ class UNet3DTrainer:
         else:
             state_dict = self.model.state_dict()
 
-        utils.save_checkpoint({
+        save_checkpoint({
             'epoch': self.num_epoch + 1,
             'num_iterations': self.num_iterations,
             'model_state_dict': state_dict,
@@ -287,15 +285,15 @@ class UNet3DTrainer:
 
     def _log_images(self, input, target, prediction, prefix):
 
-        _, ch1, ch2, ch4 = self._split_channels(target)
-        Sagittal_ch1, Coronal_ch1, Horizontal_ch1 = self._split_image(torch.reshape(ch1,(128,128,128)))
-        Sagittal_ch2, Coronal_ch2, Horizontal_ch2 = self._split_image(torch.reshape(ch2,(128,128,128)))
-        Sagittal_ch4, Coronal_ch4, Horizontal_ch4 = self._split_image(torch.reshape(ch4,(128,128,128)))
+        _, ch1, ch2, ch4 = split_channels(target)
+        Sagittal_ch1, Coronal_ch1, Horizontal_ch1 = split_image(ch1)
+        Sagittal_ch2, Coronal_ch2, Horizontal_ch2 = split_image(ch2)
+        Sagittal_ch4, Coronal_ch4, Horizontal_ch4 = split_image(ch4)
 
-        _, pred_ch1, pred_ch2, pred_ch4 = self._split_channels(prediction)
-        Sagittal_pred_ch1, Coronal_pred_ch1, Horizontal_pred_ch1 = self._split_image(torch.reshape(pred_ch1,(128,128,128)))
-        Sagittal_pred_ch2, Coronal_pred_ch2, Horizontal_pred_ch2 = self._split_image(torch.reshape(pred_ch2,(128,128,128)))
-        Sagittal_pred_ch4, Coronal_pred_ch4, Horizontal_pred_ch4 = self._split_image(torch.reshape(pred_ch2,(128,128,128)))
+        _, pred_ch1, pred_ch2, pred_ch4 = split_channels(prediction)
+        Sagittal_pred_ch1, Coronal_pred_ch1, Horizontal_pred_ch1 = split_image(pred_ch1)
+        Sagittal_pred_ch2, Coronal_pred_ch2, Horizontal_pred_ch2 = split_image(pred_ch2)
+        Sagittal_pred_ch4, Coronal_pred_ch4, Horizontal_pred_ch4 = split_image(pred_ch2)
 
         self.writer.add_image(prefix + "seg_Sagittal_ch1", Sagittal_ch1, self.num_iterations, dataformats='CHW')
         self.writer.add_image(prefix + "seg_Coronal_ch1", Coronal_ch1, self.num_iterations, dataformats='CHW')
@@ -315,18 +313,6 @@ class UNet3DTrainer:
         self.writer.add_image(prefix + "pred_Sagittal_ch4", Sagittal_pred_ch4, self.num_iterations, dataformats='CHW')
         self.writer.add_image(prefix + "pred_Coronal_ch4", Coronal_pred_ch4, self.num_iterations, dataformats='CHW')
         self.writer.add_image(prefix + "pred_Horizontal_ch4", Horizontal_pred_ch4, self.num_iterations, dataformats='CHW')
-
-    @staticmethod
-    def _split_channels(image):
-        return torch.chunk(image, dim=1, chunks=4)
-
-    @staticmethod
-    def _split_image(image):
-        Sagittal = torch.unsqueeze(image[image.shape[0] // 2], 0)
-        Coronal = torch.unsqueeze(image[:, image.shape[1] // 2], 0)
-        Horizontal = torch.unsqueeze(image[:, :, image.shape[2] // 2], 0)
-
-        return Sagittal, Coronal, Horizontal
 
     @staticmethod
     def _batch_size(input):

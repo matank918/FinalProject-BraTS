@@ -1,17 +1,10 @@
 import nibabel as nib
+import torch
 import matplotlib.pyplot as plt
 import numpy as np
 import os
-
-def load_data(dir):
-    files_list = [os.path.join(dir, dI) for dI in os.listdir(dir)]
-    data = {}
-    for file in files_list:
-        name = file[-12:-7]
-        seg_image = nib.load(file).get_fdata()
-        data[name] = seg_image
-
-    return data
+from CustomTransformations import LoadData, ToTensor, CustomNormalize, RandomCrop3D, OneHotEncoding3d
+from utils import split_image, split_channels
 
 def show_image(image, name):
     """display 3d image with shape of (128,128,128)"""
@@ -32,19 +25,42 @@ def show_image(image, name):
 
 def histogram_image(image):
     # print("unique value:", np.unique(image))
-    print("mean:", np.mean(image))
-    print("var:", np.var(image))
-    print("std:", np.std(image))
+    print("mean:", torch.mean(image))
+    print("var:", torch.var(image))
+    print("std:", torch.std(image))
 
     plt.figure('historgram')
     result = image.flatten()
-    plt.hist(result, bins=20, facecolor='red', alpha=0.75, histtype='step')
+    plt.hist(result, bins=20)
     plt.show()
 
-
 if __name__ == '__main__':
+    # set all needed transformation
     dir = r"C:\Users\User\Documents\FinalProject\MICA BRaTS2018\Training\HGG\Brats18_2013_2_1"
-    data = load_data(dir)
-    for image_name, image in data.items():
-        show_image(image,image_name)
-        histogram_image(image)
+    load_data = LoadData()
+    data, label, image_names = load_data(dir, with_names=True)
+    to_tensor = ToTensor()
+    normalize = CustomNormalize()
+    net_dim = (128, 128, 128)
+    rand_crop = RandomCrop3D(data.shape, net_dim)
+    one_hot = OneHotEncoding3d(label.shape)
+    # load data
+    # data, label = rand_crop(normalize(to_tensor(data)), to_tensor(one_hot(label)))
+    data, label = normalize(to_tensor(data)), to_tensor(one_hot(label))
+
+    # display data
+    mri1, mri2, mri3, mri4 = split_channels(data, dim=0)
+    ch0, ch1, ch2, ch4 = split_channels(label, dim=0)
+    show_image(mri1, image_names[0])
+    show_image(mri2, image_names[1])
+    show_image(mri3, image_names[2])
+    show_image(mri4, image_names[3])
+    show_image(ch0, "ch0")
+    show_image(ch1, "ch1")
+    show_image(ch2, "ch2")
+    show_image(ch4, "ch4")
+
+    # Sagittal_ch1, Coronal_ch1, Horizontal_ch1 = split_image(ch1)
+
+    # histogram_image(Sagittal_ch1)
+

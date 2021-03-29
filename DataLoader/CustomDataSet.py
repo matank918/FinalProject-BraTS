@@ -56,3 +56,4 @@ if __name__ == '__main__':
     transformations = transforms.Compose([ToTensor()])
     Dataset = BasicDataset(dir, transformations)
     data, label = Dataset.__getitem__(5)
+
