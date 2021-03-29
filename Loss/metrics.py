@@ -39,8 +39,9 @@ class DiceMetric(_AbstractDiceMetric):
 
         # compute per channel Dice Coefficient
         intersect = 2 * (input * target).sum(-1)
-
         denominator = input.sum(-1) + target.sum(-1)
+        # denominator = torch.square(input).sum(-1) + torch.square(target).sum(-1)
+
         result = (intersect + epsilon) / (denominator + epsilon)
         return result
 

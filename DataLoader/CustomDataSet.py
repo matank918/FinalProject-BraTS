@@ -1,31 +1,37 @@
 import os
-import torch
 from torch.utils.data import Dataset
-import numpy as np
 from torchvision import transforms
 from DataLoader.CustomTransformations import RandomCrop3D, LoadData, OneHotEncoding3d, ToTensor, CustomNormalize
 
 
 class BasicDataset(Dataset):
-    def __init__(self, images_dir, transforms=None, net_dim=(128, 128, 128)):
+    def __init__(self, data_dir, transforms=None, net_dim=(128, 128, 128)):
         """:param images_dir: (str)"""
 
-        self.dir = images_dir
-        self.net_dim = net_dim
+        self.dir = data_dir
+        self.training_dir = data_dir + '\\' + 'Training'
+        # self.validation_dir = data_dir + '\\' + 'validation'
+        self.cancer_type = ['HGG', 'LGG']
+        self.training_data = []
+        self.validation_data = []
 
         self.folder_names = []
-        self.cancer_type = ['HGG', 'LGG']
-        self.get_folder_names()
+        self.net_dim = net_dim
         self.transforms = transforms
-
         self.load_data = LoadData()
+        self.get_folder_names()
 
     def get_folder_names(self):
         """create a list of paths for each MRI image's folder"""
         for cancer_type in self.cancer_type:
-            file_dir = os.path.join(self.dir, cancer_type)
-            self.folder_names = self.folder_names + [os.path.join(file_dir, dI) for dI in os.listdir(file_dir) if
+            file_dir = os.path.join(self.training_dir, cancer_type)
+            self.training_data = self.training_data + [os.path.join(file_dir, dI) for dI in os.listdir(file_dir) if
                                                      os.path.isdir(os.path.join(file_dir, dI))]
+
+        # self.validation_data = [os.path.join(self.validation_dir, dI) for dI in os.listdir(self.validation_dir) if
+        #                                              os.path.isdir(os.path.join(self.validation_dir, dI))]
+
+        self.folder_names = self.training_data + self.validation_data
 
     def __len__(self):
         """:return (int): return length of the list "folder_names"""
@@ -46,14 +52,7 @@ class BasicDataset(Dataset):
 
 
 if __name__ == '__main__':
-    dir = r"C:\Users\User\Documents\FinalProject\MICA BRaTS2018\Training"
+    dir = r"C:\Users\User\Documents\FinalProject\MICA BRaTS2018"
     transformations = transforms.Compose([ToTensor()])
     Dataset = BasicDataset(dir, transformations)
     data, label = Dataset.__getitem__(5)
-
-    """In seg file
-    Label 1: necrotic and non-enhancing tumor
-    Label 2: edema 
-    Label 4: enhancing tumor
-    Label 0: background
-    """

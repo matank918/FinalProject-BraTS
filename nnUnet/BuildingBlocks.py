@@ -14,11 +14,11 @@ class DoubleConv(nn.Module):
         self.double_conv = nn.Sequential(
             nn.Conv3d(in_channels, out_channels, kernel_size=3, padding=1,
                       stride=stride_first_layer),
-            nn.InstanceNorm3d(out_channels),
             nn.LeakyReLU(inplace=True),
-            nn.Conv3d(out_channels, out_channels, kernel_size=3, padding=1),
             nn.InstanceNorm3d(out_channels),
-            nn.LeakyReLU(inplace=True)
+            nn.Conv3d(out_channels, out_channels, kernel_size=3, padding=1),
+            nn.LeakyReLU(inplace=True),
+            nn.InstanceNorm3d(out_channels)
         )
 
     def forward(self, x):

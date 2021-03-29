@@ -7,7 +7,7 @@ from utils import get_number_of_learnable_parameters
 
 class Abstract3DUNet(nn.Module):
 
-    def __init__(self, in_channels, out_channels, f_maps, apply_pooling, interpolate, basic_module=DoubleConv):
+    def __init__(self, in_channels, out_channels, f_maps, apply_pooling, basic_module=DoubleConv):
         """
           Args:
               :param in_channels:(int) number of input channels
@@ -19,34 +19,40 @@ class Abstract3DUNet(nn.Module):
 
         # create encoder path consisting of Encoder modules. Depth of the encoder is equal to `len(f_maps)`
         encoders = []
-        for i, out_feature_num in enumerate(f_maps):
+        for i in range(len(f_maps)):
             if i == 0:
-                encoder = basic_module(in_channels, out_feature_num, stride_first_layer=1)
+                encoder = basic_module(in_channels, f_maps[i], stride_first_layer=1)
             else:
-                encoder = Encoder(f_maps[i - 1], out_feature_num, basic_module=basic_module, apply_pooling=apply_pooling)
+                encoder = Encoder(f_maps[i - 1], f_maps[i], basic_module=basic_module, apply_pooling=apply_pooling)
 
             encoders.append(encoder)
         self.encoders = nn.ModuleList(encoders)
 
         #  create decoder path consisting of the Decoder modules. The length of the decoder is equal to len(f_maps) - 1
         decoders = []
+        final_activation_layers = []
         reversed_f_maps = list(reversed(f_maps))
         for i in range(len(reversed_f_maps) - 1):
-            conv_trans_channels = reversed_f_maps[i]
-            in_feature_num = reversed_f_maps[i] + reversed_f_maps[i + 1]
-            out_feature_num = reversed_f_maps[i + 1]
+            in_feature_num = reversed_f_maps[i + 1]
+            if i < 4:
+                out_feature_num = reversed_f_maps[i + 2]
+                conv_channels = reversed_f_maps[i + 1] + reversed_f_maps[i + 2]
+            else:
+                out_feature_num = out_channels
 
-            decoder = Decoder(conv_trans_channels, in_feature_num, out_feature_num, basic_module=basic_module,
-                              interpolate=interpolate)
+            decoder = Decoder(in_feature_num, out_feature_num, basic_module=basic_module)
+            final_activation = nn.Sequential(nn.Conv3d(out_feature_num,out_feature_num, kernel_size=1), nn.Softmax(dim=1))
             decoders.append(decoder)
+            final_activation_layers.append(final_activation)
 
         self.decoders = nn.ModuleList(decoders)
-
-        # activation function
-        self.final_activation = nn.Softmax(dim=1)
+        self.final_activation = nn.ModuleList(final_activation_layers[1:])
+        print(self.decoders)
+        print(self.final_activation)
 
         # final Double conv
-        self.final_conv = nn.Conv3d(f_maps[0], out_channels, 1, stride=1, padding=0)
+        # self.final_activation = nn.Sequential(nn.Conv3d(f_maps[0], out_channels, kernel_size=1),
+        #                                       nn.Softmax(dim=1))
 
     def forward(self, x):
         # encoder part
@@ -65,27 +71,25 @@ class Abstract3DUNet(nn.Module):
             # pass the output from the corresponding encoder and the output of the previous decoder
             x = decoder(encoder_features, x)
             if i > 0:
-                x = self.final_activation(x)
+                final_activation = self.final_activation[i-1]
+                x = final_activation(x)
             # print("decoder:", x.size())
-
-        x = self.final_conv(x)
-        x = self.final_activation(x)
 
         return x
 
 
 class UNet3D(Abstract3DUNet):
-    def __init__(self, in_channels, out_channels, f_maps, apply_pooling, interpolate, basic_module):
+    def __init__(self, in_channels, out_channels, f_maps, apply_pooling, basic_module):
         super(UNet3D, self).__init__(in_channels=in_channels, out_channels=out_channels,
                                      f_maps=f_maps, apply_pooling=apply_pooling,
-                                     interpolate=interpolate, basic_module=basic_module)
+                                    basic_module=basic_module)
 
 
 if __name__ == '__main__':
     torch.cuda.empty_cache()
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     f_maps = [32, 64, 128, 256, 320, 320]
-    model = UNet3D(4, 4, f_maps, interpolate=True, apply_pooling=False, basic_module=DoubleConv)
+    model = UNet3D(4, 4, f_maps, apply_pooling=False, basic_module=DoubleConv)
     model.to(device)
     rand_image = torch.rand(1, 4, 128, 128, 128).to(device)
     print(get_number_of_learnable_parameters(model))

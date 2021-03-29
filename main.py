@@ -17,12 +17,12 @@ def get_model():
     module = importlib.import_module(cfg.module_name)
     basic_block = getattr(module, cfg.basic_block)
     return UNet3D(in_channels=cfg.in_channels, out_channels=cfg.out_channels, f_maps=cfg.f_maps,
-                  apply_pooling=cfg.apply_pooling, interpolate=cfg.interpolate
+                  apply_pooling=cfg.apply_pooling
                   ,basic_module=basic_block)
 
 
 def get_train_loaders():
-    dataset = BasicDataset(images_dir=cfg.loader_path)
+    dataset = BasicDataset(cfg.loader_path)
     n_val = int(len(dataset) * cfg.val_percent)
     n_train = len(dataset) - n_val
     train, val = random_split(dataset, [n_train, n_val])
@@ -45,7 +45,6 @@ def _create_trainer(model, device, optimizer, lr_scheduler, loss_criterion, eval
                          lr_scheduler=lr_scheduler,
                          eval_criterion=eval_criterion, device=device, loaders=loaders,
                          num_iterations=cfg.num_iterations,
-                         skip_train_validation=cfg.skip_train_validation,
                          validate_iters=cfg.validate_iters, checkpoint_dir=cfg.checkpoint_dir,
                          best_eval_score=cfg.best_eval_score,
                          validate_after_iters=cfg.validate_after_iters,

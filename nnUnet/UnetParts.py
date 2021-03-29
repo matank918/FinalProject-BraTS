@@ -15,6 +15,7 @@ class Encoder(nn.Module):
           :param apply_pooling: (bool) if true Dimension reduction is done with Max Pool,
           if False it is done with stride=2 in the first conv layer
       """
+
     def __init__(self, in_channels, out_channels, basic_module=DoubleConv, apply_pooling=False):
         super().__init__()
         if apply_pooling:
@@ -38,24 +39,25 @@ class Decoder(nn.Module):
           :param out_channels: (int) number of output segmentation masks;
           :param basic_module: (nn.Module) the base module for the net (default is DoubleConv)
       """
-    def __init__(self, conv_trans_channels, in_channels, out_channels, basic_module=DoubleConv, interpolate=False):
+
+    def __init__(self, in_channels, out_channels, conv_channels=None, basic_module=DoubleConv):
         super().__init__()
-        self.final_conv = nn.Conv3d(out_channels, out_channels, kernel_size=1)
-        if interpolate:
-            self.Upsample = partial(self._interpolate, mode='nearest')
-        else:
-            # Dout=(Din−1)×stride[0]−2×padding[0] + dilation[0]×(kernel_size[0]−1) + output_padding[0] + 1
-            self.Upsample = nn.ConvTranspose3d(conv_trans_channels, conv_trans_channels, kernel_size=3,
-                                            stride=2, padding=1, output_padding=1)
-        self.basic_module = basic_module(in_channels, out_channels, stride_first_layer=1)
+        # Dout=(Din−1)×stride[0]−2×padding[0] + dilation[0]×(kernel_size[0]−1) + output_padding[0] + 1
+        # self.Upsample = nn.ConvTranspose3d(in_channels, int(in_channels/2), kernel_size=3,
+        #                                    stride=2, padding=1, output_padding=1)
+        self.Upsample = nn.ConvTranspose3d(in_channels, in_channels, kernel_size=3,
+                                           stride=2, padding=1, output_padding=1)
+
+        self.basic_module = basic_module(2*in_channels, out_channels, stride_first_layer=1)
 
     def forward(self, encoder_features, x1):
-        output_size = encoder_features.size()[2:]
-        x1 = self.Upsample(x1, output_size)
+        # print(encoder_features.size())
+        # num_of_channels = int(encoder_features.size()[1]/2)
+        x1 = self.Upsample(x1)
+        # encoder_features = encoder_features[:, num_of_channels:(2 * num_of_channels), :, :, :]
         x = torch.cat([encoder_features, x1], dim=1)
-        x = self.basic_module(x)
-        return self.final_conv(x)
+        return self.basic_module(x)
 
-    @staticmethod
-    def _interpolate(x, size, mode):
-        return F.interpolate(x, size=size, mode=mode)
+    # @staticmethod
+    # def _interpolate(x, size, mode):
+    #     return F.interpolate(x, size=size, mode=mode)

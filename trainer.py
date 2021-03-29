@@ -35,17 +35,11 @@ class UNet3DTrainer:
         best_eval_score (float): best validation score so far (higher better)
         num_iterations (int): useful when loading the model from the checkpoint
         num_epoch (int): useful when loading the model from the checkpoint
-        tensorboard_formatter (callable): converts a given batch of input/output/target image to a series of images
-            that can be displayed in tensorboard
-        sample_plotter (callable): saves sample inputs, network outputs and targets to a given directory
-            during validation phase
-        skip_train_validation (bool): if True eval_criterion is not evaluated on the training set (used mostly when
-            evaluation is expensive)
     """
 
     def __init__(self, model, logger, optimizer, loss_criterion, lr_scheduler,
-                 eval_criterion, device, loaders, num_iterations,
-                 skip_train_validation, validate_iters, checkpoint_dir, best_eval_score,
+                 eval_criterion, device, loaders, num_iterations
+                 ,validate_iters, checkpoint_dir, best_eval_score,
                  validate_after_iters, log_after_iters, num_epoch, max_num_iterations, eval_score_higher_is_better,
                  max_num_epochs):
 
@@ -69,7 +63,6 @@ class UNet3DTrainer:
 
         self.num_iterations = num_iterations
         self.num_epoch = num_epoch
-        self.skip_train_validation = skip_train_validation
 
         self.logger.info(model)
         logger.info(f'eval_score_higher_is_better: {eval_score_higher_is_better}')
@@ -115,8 +108,10 @@ class UNet3DTrainer:
             self.logger.info(f'Training iteration [{self.num_iterations}/{self.max_num_iterations}]. '
                              f'Epoch [{self.num_epoch}/{self.max_num_epochs}]')
 
+            # splits between input and target
             input, target = self._split_training_batch(batch)
 
+            # get output from the net, calculate the loss
             output, loss = self._forward_pass(input, target)
 
             train_losses.update(loss.item(), self._batch_size(input))
@@ -153,9 +148,8 @@ class UNet3DTrainer:
             if self.num_iterations % self.log_after_iters == 0:
 
                 # compute eval criterion
-                if not self.skip_train_validation:
-                    eval_score = self.eval_criterion(output, target)
-                    train_eval_scores.update(eval_score.item(), self._batch_size(input))
+                eval_score = self.eval_criterion(output, target)
+                train_eval_scores.update(eval_score.item(), self._batch_size(input))
 
                 # log stats, params and images
                 self.logger.info(
@@ -167,26 +161,9 @@ class UNet3DTrainer:
 
             if self.should_stop():
                 return True
+
             print("time for one iteration:", time.time() - time_now)
             self.num_iterations += 1
-
-        return False
-
-    def should_stop(self):
-        """
-        Training will terminate if maximum number of iterations is exceeded or the learning rate drops below
-        some predefined threshold (1e-6 in our case)
-        """
-
-        if self.max_num_iterations < self.num_iterations:
-            self.logger.info(f'Maximum number of iterations {self.max_num_iterations} exceeded.')
-            return True
-
-        min_lr = 1e-6
-        lr = self.optimizer.param_groups[0]['lr']
-        if lr < min_lr:
-            self.logger.info(f'Learning rate below the minimum {min_lr}.')
-            return True
 
         return False
 
@@ -235,6 +212,25 @@ class UNet3DTrainer:
 
         return output, loss
 
+    def should_stop(self):
+        """
+        Training will terminate if maximum number of iterations is exceeded or the learning rate drops below
+        some predefined threshold (1e-6 in our case)
+        """
+
+        if self.max_num_iterations < self.num_iterations:
+            self.logger.info(f'Maximum number of iterations {self.max_num_iterations} exceeded.')
+            return True
+
+        min_lr = 1e-6
+        lr = self.optimizer.param_groups[0]['lr']
+        if lr < min_lr:
+            self.logger.info(f'Learning rate below the minimum {min_lr}.')
+            return True
+
+        return False
+
+
     def _is_best_eval_score(self, eval_score):
         if self.eval_score_higher_is_better:
             is_best = eval_score > self.best_eval_score
@@ -268,7 +264,6 @@ class UNet3DTrainer:
             'validate_after_iters': self.validate_after_iters,
             'log_after_iters': self.log_after_iters,
             'validate_iters': self.validate_iters,
-            'skip_train_validation': self.skip_train_validation
         }, is_best, checkpoint_dir=self.checkpoint_dir,
             logger=self.logger)
 
