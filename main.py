@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, random_split
+from torch_poly_lr_decay import PolynomialLRDecay
 
 from utils import get_number_of_learnable_parameters, get_logger
 from trainer import UNet3DTrainer
@@ -58,7 +59,8 @@ def _create_optimizer(model):
 
 
 def _create_lr_scheduler(optimizer):
-    return optim.lr_scheduler.MultiStepLR(optimizer, milestones=[30, 80], gamma=0.1)
+    return PolynomialLRDecay(optimizer, max_decay_steps=cfg.max_decay_steps,
+                             end_learning_rate=cfg.end_learning_rate, power=cfg.power)
 
 
 if __name__ == '__main__':
@@ -96,7 +98,7 @@ if __name__ == '__main__':
     optimizer = _create_optimizer(model)
 
     # Create learning rate adjustment strategy
-    lr_scheduler = None
+    lr_scheduler = _create_lr_scheduler(optimizer)
 
     # Create model trainer
     trainer = _create_trainer(model=model, optimizer=optimizer, device=device, logger=logger,

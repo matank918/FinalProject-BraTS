@@ -25,9 +25,12 @@ def show_image(image, name):
 
 def histogram_image(image):
     # print("unique value:", np.unique(image))
-    print("mean:", torch.mean(image))
-    print("var:", torch.var(image))
-    print("std:", torch.std(image))
+    # print("mean:", torch.mean(image))
+    # print("var:", torch.var(image))
+    # print("std:", torch.std(image))
+    print("mean for non-zero voxels:", torch.mean(image[image.nonzero(as_tuple=True)]))
+    print("var for non zero voxels:", torch.var(image[image.nonzero(as_tuple=True)]))
+    print("std for non zero voxels:", torch.std(image[image.nonzero(as_tuple=True)]))
 
     plt.figure('historgram')
     result = image.flatten()
@@ -45,8 +48,8 @@ if __name__ == '__main__':
     rand_crop = RandomCrop3D(data.shape, net_dim)
     one_hot = OneHotEncoding3d(label.shape)
     # load data
-    # data, label = rand_crop(normalize(to_tensor(data)), to_tensor(one_hot(label)))
-    data, label = normalize(to_tensor(data)), to_tensor(one_hot(label))
+    # data, label = rand_crop(to_tensor(data), to_tensor(one_hot(label)))
+    data, label = rand_crop(normalize(to_tensor(data)), to_tensor(one_hot(label)))
 
     # display data
     mri1, mri2, mri3, mri4 = split_channels(data, dim=0)
@@ -62,5 +65,5 @@ if __name__ == '__main__':
 
     # Sagittal_ch1, Coronal_ch1, Horizontal_ch1 = split_image(ch1)
 
-    # histogram_image(Sagittal_ch1)
+    histogram_image(mri1)
 

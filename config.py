@@ -14,8 +14,8 @@ f_maps = [32, 64, 128, 256, 320, 320]
 apply_pooling = False
 
 #loss and eveal
-loss_name = 'DiceLoss'
-# loss_name = 'BCELoss'
+# loss_name = 'DiceLoss'
+loss_name = 'BCEDiceLoss'
 eval_name = 'DiceMetric'
 
 #loader
@@ -29,18 +29,18 @@ momentum = 0.99
 nesterov = True
 
 # scheduler
-step_size = 30
-gamma = 0.1
-
+end_learning_rate = 1e-6
+max_decay_steps = 4569
+power = 4
 
 #train
 num_epoch = 1
-validate_after_iters = 10
+validate_after_iters = 100
 validate_iters = 35
-log_after_iters = 30
+log_after_iters = 50
 max_num_epochs = 100
 eval_score_higher_is_better = True
 num_iterations = 1
-checkpoint_dir = r'C:\Users\User\Documents\FinalProject\FinalProject-BraTS'
-max_num_iterations = 50000
+checkpoint_dir = r'C:\Users\User\Documents\FinalProject\FinalProject-BraTS\checkpoint'
+max_num_iterations = 5000
 best_eval_score = 0

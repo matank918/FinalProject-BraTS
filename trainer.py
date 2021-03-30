@@ -91,8 +91,6 @@ class UNet3DTrainer:
 
     def train(self):
         """Trains the model for 1 epoch.
-        Args:
-            train_loader (torch.utils.data.DataLoader): training data loader
         Returns:
             True if the training should be terminated immediately, False otherwise
         """
@@ -227,7 +225,6 @@ class UNet3DTrainer:
             return True
 
         return False
-
 
     def _is_best_eval_score(self, eval_score):
         if self.eval_score_higher_is_better:

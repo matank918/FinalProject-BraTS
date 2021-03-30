@@ -5,15 +5,9 @@ from torch.autograd import Variable
 from utils import flatten
 import math
 
-class _AbstractDiceLoss(nn.Module):
-    """Base class for different implementations of Dice loss."""
-
+class DiceLoss(nn.Module):
     def __init__(self):
-        super(_AbstractDiceLoss, self).__init__()
-
-    def dice(self, input, target):
-        # actual Dice score computation; to be implemented by the subclass
-        raise NotImplementedError
+        super().__init__()
 
     def forward(self, input, target):
         # compute per channel Dice coefficient
@@ -21,11 +15,6 @@ class _AbstractDiceLoss(nn.Module):
 
         # average Dice score across all channels/classes
         return 1 - torch.mean(per_channel_dice)
-
-
-class DiceLoss(_AbstractDiceLoss):
-    def __init__(self):
-        super().__init__()
 
     def dice(self, input, target):
         return self.compute_per_channel_dice(input, target)
@@ -50,40 +39,30 @@ class DiceLoss(_AbstractDiceLoss):
 
         # compute per channel Dice Coefficient
         intersect = 2 * (input * target).sum(-1)
-        denominator = input.sum(-1) + target.sum(-1)
-        # denominator = torch.square(input).sum(-1) + torch.square(target).sum(-1)
+        # denominator = input.sum(-1) + target.sum(-1)
+        denominator = torch.square(input).sum(-1) + torch.square(target).sum(-1)
         result = (intersect + epsilon) / (denominator + epsilon)
         return result
 
+class BCEDiceLoss(nn.Module):
+    """Linear combination of BCE and Dice losses"""
 
-class CustomBCELoss(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.loss = nn.BCELoss()
+    def __init__(self, alpha=1.0, beta=1.0):
+        super(BCEDiceLoss, self).__init__()
+        self.alpha = alpha
+        self.bce = nn.BCELoss()
+        self.beta = beta
+        self.dice = DiceLoss()
 
     def forward(self, input, target):
-        assert input.size() == target.size(), "'input' and 'target' must have the same shape"
-
-        input = flatten(input)
-        target = flatten(target)
-        loss = torch.zeros(input.shape[0], dtype=torch.float32)
-        for i in range(loss.shape[0]):
-            ones = torch.count_nonzero(target[i]).item()
-            total = list(target[i].shape)[0]
-            if ones != 0:
-                weight = (total/ones)
-            else:
-                weight = 1000
-            loss[i] = weight*self.loss(input[i],target[i])
-
-        return torch.mean(loss)
+        return self.alpha * self.bce(input, target) + self.beta * self.dice(input, target)
 
 
 def create_loss(name):
     if name == 'DiceLoss':
         return DiceLoss()
-    elif name == "BCELoss":
-        return CustomBCELoss()
+    elif name == "BCEDiceLoss":
+        return BCEDiceLoss()
 
 
 if __name__ == '__main__':
@@ -91,6 +70,6 @@ if __name__ == '__main__':
 
     rand_image1 = torch.empty(1, 4, 128, 128, 128, dtype=torch.float32).random_(2)
     rand_image2 = torch.empty(1, 4, 128, 128, 128, dtype=torch.float32).random_(2)
-    loss = CustomBCELoss()
-    t = loss(rand_image1, rand_image2)
+    loss = BCEDiceLoss(0.5,0.5)
+    t = loss(rand_image1, rand_image1)
     print(t)
