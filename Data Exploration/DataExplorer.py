@@ -6,6 +6,7 @@ import os
 from CustomTransformations import LoadData, ToTensor, CustomNormalize, RandomCrop3D, OneHotEncoding3d
 from utils import split_image, split_channels
 
+
 def show_image(image, name):
     """display 3d image with shape of (128,128,128)"""
     fig = plt.figure()
@@ -23,11 +24,14 @@ def show_image(image, name):
 
     plt.show()
 
+
 def histogram_image(image):
     # print("unique value:", np.unique(image))
-    # print("mean:", torch.mean(image))
-    # print("var:", torch.var(image))
-    # print("std:", torch.std(image))
+    print("mean:", torch.mean(image))
+    print("var:", torch.var(image))
+    print("std:", torch.std(image))
+
+    print("number of nonzero voxels:", len(torch.nonzero(image)))
     print("mean for non-zero voxels:", torch.mean(image[image.nonzero(as_tuple=True)]))
     print("var for non zero voxels:", torch.var(image[image.nonzero(as_tuple=True)]))
     print("std for non zero voxels:", torch.std(image[image.nonzero(as_tuple=True)]))
@@ -36,6 +40,7 @@ def histogram_image(image):
     result = image.flatten()
     plt.hist(result, bins=20)
     plt.show()
+
 
 if __name__ == '__main__':
     # set all needed transformation
@@ -48,22 +53,22 @@ if __name__ == '__main__':
     rand_crop = RandomCrop3D(data.shape, net_dim)
     one_hot = OneHotEncoding3d(label.shape)
     # load data
-    # data, label = rand_crop(to_tensor(data), to_tensor(one_hot(label)))
+    # # data, label = rand_crop(to_tensor(data), to_tensor(one_hot(label)))
     data, label = rand_crop(normalize(to_tensor(data)), to_tensor(one_hot(label)))
-
-    # display data
-    mri1, mri2, mri3, mri4 = split_channels(data, dim=0)
-    ch0, ch1, ch2, ch4 = split_channels(label, dim=0)
-    show_image(mri1, image_names[0])
-    show_image(mri2, image_names[1])
-    show_image(mri3, image_names[2])
-    show_image(mri4, image_names[3])
-    show_image(ch0, "ch0")
-    show_image(ch1, "ch1")
-    show_image(ch2, "ch2")
-    show_image(ch4, "ch4")
+    # data = normalize(to_tensor(data))
+    # # display data
+    # mri1, mri2, mri3, mri4 = split_channels(data, dim=0)
+    # ch0, ch1, ch2, ch4 = split_channels(label, dim=0)
+    # show_image(mri1, image_names[0])
+    # show_image(mri2, image_names[1])
+    # show_image(mri3, image_names[2])
+    # show_image(mri4, image_names[3])
+    # show_image(ch0, "ch0")
+    # show_image(ch1, "ch1")
+    # show_image(ch2, "ch2")
+    # show_image(ch4, "ch4")
 
     # Sagittal_ch1, Coronal_ch1, Horizontal_ch1 = split_image(ch1)
 
-    histogram_image(mri1)
+    # histogram_image(mri1)
 

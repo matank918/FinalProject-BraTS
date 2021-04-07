@@ -3,7 +3,6 @@ import numpy as np
 import torch
 import torch.nn as nn
 from torch.utils.tensorboard import SummaryWriter
-from tqdm import tqdm
 from utils import RunningAverage, save_checkpoint, split_image, split_channels
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 import time
@@ -94,10 +93,9 @@ class UNet3DTrainer:
         Returns:
             True if the training should be terminated immediately, False otherwise
         """
-
         train_losses = RunningAverage()
         train_eval_scores = RunningAverage()
-        # time_now = time.time()
+
         # sets the model in training mode
         self.model.train()
         for batch in self.loaders['train']:
@@ -155,6 +153,9 @@ class UNet3DTrainer:
                 self._log_stats('train', train_losses.avg, train_eval_scores.avg)
                 self._log_params()
                 # self._log_images(input, target, output, 'train_')
+
+                train_losses = RunningAverage()
+                train_eval_scores = RunningAverage()
 
             if self.should_stop():
                 return True

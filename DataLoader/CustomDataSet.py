@@ -9,7 +9,7 @@ class BasicDataset(Dataset):
         """:param images_dir: (str)"""
 
         self.dir = data_dir
-        self.training_dir = data_dir + '\\' + 'Training'
+        self.training_dir = data_dir + '/' + 'Training'
         # self.validation_dir = data_dir + '\\' + 'validation'
         self.cancer_type = ['HGG', 'LGG']
         self.training_data = []
@@ -40,6 +40,7 @@ class BasicDataset(Dataset):
     def __getitem__(self, i):
         data, label = self.load_data(self.folder_names[i])
         data, label = self.basic_transform(data, label)
+        # data, label = self.transforms(data, label)
         return data, label
 
     def basic_transform(self, data, label):

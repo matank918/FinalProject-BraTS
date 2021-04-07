@@ -3,8 +3,6 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, random_split
-from torch_poly_lr_decay import PolynomialLRDecay
-
 from utils import get_number_of_learnable_parameters, get_logger
 from trainer import UNet3DTrainer
 from DataLoader.CustomDataSet import BasicDataset
@@ -14,7 +12,7 @@ import config as cfg
 from nnUnet.nnUnet3d import UNet3D
 
 
-def get_model():
+def _get_model():
     module = importlib.import_module(cfg.module_name)
     basic_block = getattr(module, cfg.basic_block)
     return UNet3D(in_channels=cfg.in_channels, out_channels=cfg.out_channels, f_maps=cfg.f_maps,
@@ -22,7 +20,7 @@ def get_model():
                   ,basic_module=basic_block)
 
 
-def get_train_loaders():
+def _get_train_loaders():
     dataset = BasicDataset(cfg.loader_path)
     n_val = int(len(dataset) * cfg.val_percent)
     n_train = len(dataset) - n_val
@@ -33,11 +31,11 @@ def get_train_loaders():
     return loader_dict
 
 
-def get_loss_criterion():
+def _get_loss_criterion():
     return create_loss(cfg.loss_name)
 
 
-def get_eval_criterion():
+def _get_eval_criterion():
     return create_eval(cfg.eval_name)
 
 
@@ -59,8 +57,8 @@ def _create_optimizer(model):
 
 
 def _create_lr_scheduler(optimizer):
-    return PolynomialLRDecay(optimizer, max_decay_steps=cfg.max_decay_steps,
-                             end_learning_rate=cfg.end_learning_rate, power=cfg.power)
+    lr_lambda = lambda epoch: 0.99 ** epoch
+    return optim.lr_scheduler.LambdaLR(optimizer, lr_lambda)
 
 
 if __name__ == '__main__':
@@ -69,10 +67,9 @@ if __name__ == '__main__':
     logger.info(cfg)
 
     # Create the model
-    model = get_model()
+    model = _get_model()
 
     # use DataParallel if more than 1 GPU available
-
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     if torch.cuda.device_count() > 1 and not device.type == 'cpu':
         model = nn.DataParallel(model)
@@ -86,13 +83,13 @@ if __name__ == '__main__':
     logger.info(f'Number of learnable params {get_number_of_learnable_parameters(model)}')
 
     # Create loss criterion
-    loss_criterion = get_loss_criterion()
+    loss_criterion = _get_loss_criterion()
 
     # Create evaluation metric
-    eval_criterion = get_eval_criterion()
+    eval_criterion = _get_eval_criterion()
 
     # Create data loaders
-    loaders = get_train_loaders()
+    loaders = _get_train_loaders()
 
     # Create the optimizer
     optimizer = _create_optimizer(model)

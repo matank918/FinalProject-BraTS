@@ -74,7 +74,7 @@ class CustomNormalize(object):
         for i in range(x.shape[0]):
             non_zero_vox = x[i][x[i].nonzero(as_tuple=True)]
             x[i][x[i].nonzero(as_tuple=True)] = \
-                (x[i][x[i].nonzero(as_tuple=True)]-torch.mean(non_zero_vox))/torch.std(non_zero_vox)
+                ((x[i][x[i].nonzero(as_tuple=True)]-torch.mean(non_zero_vox))/torch.std(non_zero_vox))
             # x[ch] = (x[ch] - torch.mean(x[ch])) / torch.std(x[ch])
 
         return x
