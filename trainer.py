@@ -37,7 +37,7 @@ class UNet3DTrainer:
 
     def __init__(self, model, logger, optimizer, loss_criterion, lr_scheduler,
                  eval_criterion, device, loaders, num_iterations
-                 ,validate_iters, checkpoint_dir, best_eval_score,
+                 , validate_iters, checkpoint_dir, best_eval_score,
                  validate_after_iters, log_after_iters, num_epoch, max_num_iterations, eval_score_higher_is_better,
                  max_num_epochs):
 
@@ -108,8 +108,11 @@ class UNet3DTrainer:
 
             # get output from the net, calculate the loss
             output, loss = self._forward_pass(input, target)
-
             train_losses.update(loss.item(), self._batch_size(input))
+
+            # compute eval criterion for training set
+            eval_score = self.eval_criterion(output, target)
+            train_eval_scores.update(eval_score.item(), self._batch_size(input))
 
             # compute gradients and update parameters
             self.optimizer.zero_grad()
@@ -142,10 +145,6 @@ class UNet3DTrainer:
 
             if self.num_iterations % self.log_after_iters == 0:
 
-                # compute eval criterion
-                eval_score = self.eval_criterion(output, target)
-                train_eval_scores.update(eval_score.item(), self._batch_size(input))
-
                 # log stats, params and images
                 self.logger.info(
                     f'Training stats. Loss: {train_losses.avg}. Evaluation score: {train_eval_scores.avg}')
@@ -153,9 +152,6 @@ class UNet3DTrainer:
                 self._log_stats('train', train_losses.avg, train_eval_scores.avg)
                 self._log_params()
                 # self._log_images(input, target, output, 'train_')
-
-                train_losses = RunningAverage()
-                train_eval_scores = RunningAverage()
 
             if self.should_stop():
                 return True
@@ -282,35 +278,41 @@ class UNet3DTrainer:
             self.writer.add_histogram(name + '/grad', value.grad.data.cpu().numpy(), self.num_iterations)
 
     def _log_images(self, input, target, prediction, prefix):
+        if self._batch_size(input) == 1:
+            _, ch1, ch2, ch4 = split_channels(target)
+            Sagittal_ch1, Coronal_ch1, Horizontal_ch1 = split_image(ch1)
+            Sagittal_ch2, Coronal_ch2, Horizontal_ch2 = split_image(ch2)
+            Sagittal_ch4, Coronal_ch4, Horizontal_ch4 = split_image(ch4)
 
-        _, ch1, ch2, ch4 = split_channels(target)
-        Sagittal_ch1, Coronal_ch1, Horizontal_ch1 = split_image(ch1)
-        Sagittal_ch2, Coronal_ch2, Horizontal_ch2 = split_image(ch2)
-        Sagittal_ch4, Coronal_ch4, Horizontal_ch4 = split_image(ch4)
+            _, pred_ch1, pred_ch2, pred_ch4 = split_channels(prediction)
+            Sagittal_pred_ch1, Coronal_pred_ch1, Horizontal_pred_ch1 = split_image(pred_ch1)
+            Sagittal_pred_ch2, Coronal_pred_ch2, Horizontal_pred_ch2 = split_image(pred_ch2)
+            Sagittal_pred_ch4, Coronal_pred_ch4, Horizontal_pred_ch4 = split_image(pred_ch2)
 
-        _, pred_ch1, pred_ch2, pred_ch4 = split_channels(prediction)
-        Sagittal_pred_ch1, Coronal_pred_ch1, Horizontal_pred_ch1 = split_image(pred_ch1)
-        Sagittal_pred_ch2, Coronal_pred_ch2, Horizontal_pred_ch2 = split_image(pred_ch2)
-        Sagittal_pred_ch4, Coronal_pred_ch4, Horizontal_pred_ch4 = split_image(pred_ch2)
-
-        self.writer.add_image(prefix + "seg_Sagittal_ch1", Sagittal_ch1, self.num_iterations, dataformats='CHW')
-        self.writer.add_image(prefix + "seg_Coronal_ch1", Coronal_ch1, self.num_iterations, dataformats='CHW')
-        self.writer.add_image(prefix + "seg_Horizontal_ch1", Horizontal_ch1, self.num_iterations, dataformats='CHW')
-        self.writer.add_image(prefix + "seg_Sagittal_ch2", Sagittal_ch2, self.num_iterations, dataformats='CHW')
-        self.writer.add_image(prefix + "seg_Coronal_ch2", Coronal_ch2, self.num_iterations, dataformats='CHW')
-        self.writer.add_image(prefix + "seg_Horizontal_ch2", Horizontal_ch2, self.num_iterations, dataformats='CHW')
-        self.writer.add_image(prefix + "seg_Sagittal_ch4", Sagittal_ch4, self.num_iterations, dataformats='CHW')
-        self.writer.add_image(prefix + "seg_Coronal_ch4", Coronal_ch4, self.num_iterations, dataformats='CHW')
-        self.writer.add_image(prefix + "seg_Horizontal_ch4", Horizontal_ch4, self.num_iterations, dataformats='CHW')
-        self.writer.add_image(prefix + "pred_Sagittal_ch1", Sagittal_pred_ch1, self.num_iterations, dataformats='CHW')
-        self.writer.add_image(prefix + "pred_Coronal_ch1", Coronal_pred_ch1, self.num_iterations, dataformats='CHW')
-        self.writer.add_image(prefix + "pred_Horizontal_ch1", Horizontal_pred_ch1, self.num_iterations, dataformats='CHW')
-        self.writer.add_image(prefix + "pred_Sagittal_ch2", Sagittal_pred_ch2, self.num_iterations, dataformats='CHW')
-        self.writer.add_image(prefix + "pred_Coronal_ch2", Coronal_pred_ch2, self.num_iterations, dataformats='CHW')
-        self.writer.add_image(prefix + "pred_Horizontal_ch2", Horizontal_pred_ch2, self.num_iterations, dataformats='CHW')
-        self.writer.add_image(prefix + "pred_Sagittal_ch4", Sagittal_pred_ch4, self.num_iterations, dataformats='CHW')
-        self.writer.add_image(prefix + "pred_Coronal_ch4", Coronal_pred_ch4, self.num_iterations, dataformats='CHW')
-        self.writer.add_image(prefix + "pred_Horizontal_ch4", Horizontal_pred_ch4, self.num_iterations, dataformats='CHW')
+            self.writer.add_image(prefix + "seg_Sagittal_ch1", Sagittal_ch1, self.num_iterations, dataformats='CHW')
+            self.writer.add_image(prefix + "seg_Coronal_ch1", Coronal_ch1, self.num_iterations, dataformats='CHW')
+            self.writer.add_image(prefix + "seg_Horizontal_ch1", Horizontal_ch1, self.num_iterations, dataformats='CHW')
+            self.writer.add_image(prefix + "seg_Sagittal_ch2", Sagittal_ch2, self.num_iterations, dataformats='CHW')
+            self.writer.add_image(prefix + "seg_Coronal_ch2", Coronal_ch2, self.num_iterations, dataformats='CHW')
+            self.writer.add_image(prefix + "seg_Horizontal_ch2", Horizontal_ch2, self.num_iterations, dataformats='CHW')
+            self.writer.add_image(prefix + "seg_Sagittal_ch4", Sagittal_ch4, self.num_iterations, dataformats='CHW')
+            self.writer.add_image(prefix + "seg_Coronal_ch4", Coronal_ch4, self.num_iterations, dataformats='CHW')
+            self.writer.add_image(prefix + "seg_Horizontal_ch4", Horizontal_ch4, self.num_iterations, dataformats='CHW')
+            self.writer.add_image(prefix + "pred_Sagittal_ch1", Sagittal_pred_ch1, self.num_iterations,
+                                  dataformats='CHW')
+            self.writer.add_image(prefix + "pred_Coronal_ch1", Coronal_pred_ch1, self.num_iterations, dataformats='CHW')
+            self.writer.add_image(prefix + "pred_Horizontal_ch1", Horizontal_pred_ch1, self.num_iterations,
+                                  dataformats='CHW')
+            self.writer.add_image(prefix + "pred_Sagittal_ch2", Sagittal_pred_ch2, self.num_iterations,
+                                  dataformats='CHW')
+            self.writer.add_image(prefix + "pred_Coronal_ch2", Coronal_pred_ch2, self.num_iterations, dataformats='CHW')
+            self.writer.add_image(prefix + "pred_Horizontal_ch2", Horizontal_pred_ch2, self.num_iterations,
+                                  dataformats='CHW')
+            self.writer.add_image(prefix + "pred_Sagittal_ch4", Sagittal_pred_ch4, self.num_iterations,
+                                  dataformats='CHW')
+            self.writer.add_image(prefix + "pred_Coronal_ch4", Coronal_pred_ch4, self.num_iterations, dataformats='CHW')
+            self.writer.add_image(prefix + "pred_Horizontal_ch4", Horizontal_pred_ch4, self.num_iterations,
+                                  dataformats='CHW')
 
     @staticmethod
     def _batch_size(input):
