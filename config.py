@@ -16,6 +16,7 @@ apply_pooling = False
 #loss and eveal
 loss_name = 'DiceLoss'
 # loss_name = 'BCEDiceLoss'
+# loss_name = 'GeneralizedDiceLoss'
 eval_name = 'DiceMetric'
 
 #loader
@@ -35,12 +36,12 @@ power = 4
 
 #train
 num_epoch = 1
-validate_after_iters = 100
-validate_iters = 35
-log_after_iters = 50
-max_num_epochs = 100
+validate_after_iters = 125
+validate_iters = 30
+log_after_iters = 125
+max_num_epochs = 250
 eval_score_higher_is_better = True
 num_iterations = 1
-checkpoint_dir = r'/home/kachel/project/checkpoint/'
-max_num_iterations = 5000
+checkpoint_dir = r'/home/kachel/Project/checkpoint/'
+max_num_iterations = 10000
 best_eval_score = 0
