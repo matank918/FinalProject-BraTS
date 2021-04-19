@@ -53,7 +53,10 @@ def _create_trainer(model, device, optimizer, lr_scheduler, loss_criterion, eval
 
 
 def _create_optimizer(model):
-    return optim.SGD(model.parameters(), lr=cfg.learning_rate, momentum=cfg.momentum, nesterov=cfg.nesterov)
+    if cfg.optimizer_name == 'SGD':
+        return optim.SGD(model.parameters(), lr=cfg.learning_rate, momentum=cfg.momentum, nesterov=cfg.nesterov)
+    elif cfg.optimizer_name == 'Adam':
+        return optim.Adam(model.parameters(), lr=cfg.learning_rate)
 
 
 def _create_lr_scheduler(optimizer):

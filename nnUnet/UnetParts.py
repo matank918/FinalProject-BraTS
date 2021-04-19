@@ -40,7 +40,7 @@ class Decoder(nn.Module):
           :param basic_module: (nn.Module) the base module for the net (default is DoubleConv)
       """
 
-    def __init__(self, in_channels, out_channels, conv_channels=None, basic_module=DoubleConv):
+    def __init__(self, in_channels, out_channels, basic_module=DoubleConv):
         super().__init__()
         # Dout=(Din−1)×stride[0]−2×padding[0] + dilation[0]×(kernel_size[0]−1) + output_padding[0] + 1
         # self.Upsample = nn.ConvTranspose3d(in_channels, int(in_channels/2), kernel_size=3,

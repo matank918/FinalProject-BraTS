@@ -5,6 +5,7 @@ from UnetParts import Encoder, Decoder
 from BuildingBlocks import DoubleConv, SingleConv
 from utils import get_number_of_learnable_parameters
 
+
 class Abstract3DUNet(nn.Module):
 
     def __init__(self, in_channels, out_channels, f_maps, apply_pooling, basic_module=DoubleConv):
@@ -31,28 +32,22 @@ class Abstract3DUNet(nn.Module):
         #  create decoder path consisting of the Decoder modules. The length of the decoder is equal to len(f_maps) - 1
         decoders = []
         final_activation_layers = []
-        reversed_f_maps = list(reversed(f_maps))
-        for i in range(len(reversed_f_maps) - 1):
-            in_feature_num = reversed_f_maps[i + 1]
-            if i < 4:
-                out_feature_num = reversed_f_maps[i + 2]
-                conv_channels = reversed_f_maps[i + 1] + reversed_f_maps[i + 2]
-            else:
-                out_feature_num = out_channels
+        reversed_f_maps = list(reversed(f_maps))[1:]
+        reversed_f_maps.append(out_channels)
+        print(reversed_f_maps)
+        for i in range(1, len(reversed_f_maps)):
+            in_feature_num = reversed_f_maps[i - 1]
+            out_feature_num = reversed_f_maps[i]
 
-            decoder = Decoder(in_feature_num, out_feature_num, basic_module=basic_module)
-            final_activation = nn.Sequential(nn.Conv3d(out_feature_num,out_feature_num, kernel_size=1), nn.Softmax(dim=1))
+            decoder = Decoder(in_feature_num, in_feature_num, basic_module=basic_module)
+            final_activation = nn.Sequential(nn.Conv3d(in_feature_num, out_feature_num, kernel_size=1), nn.Softmax(dim=1))
             decoders.append(decoder)
             final_activation_layers.append(final_activation)
 
         self.decoders = nn.ModuleList(decoders)
-        self.final_activation = nn.ModuleList(final_activation_layers[1:])
+        self.final_activation = nn.ModuleList(final_activation_layers)
         print(self.decoders)
         print(self.final_activation)
-
-        # final Double conv
-        # self.final_activation = nn.Sequential(nn.Conv3d(f_maps[0], out_channels, kernel_size=1),
-        #                                       nn.Softmax(dim=1))
 
     def forward(self, x):
         # encoder part
@@ -70,9 +65,8 @@ class Abstract3DUNet(nn.Module):
         for i, (decoder, encoder_features) in enumerate(zip(self.decoders, encoders_features)):
             # pass the output from the corresponding encoder and the output of the previous decoder
             x = decoder(encoder_features, x)
-            if i > 0:
-                final_activation = self.final_activation[i-1]
-                x = final_activation(x)
+            final_activation = self.final_activation[i]
+            x = final_activation(x)
             # print("decoder:", x.size())
 
         return x
@@ -81,8 +75,7 @@ class Abstract3DUNet(nn.Module):
 class UNet3D(Abstract3DUNet):
     def __init__(self, in_channels, out_channels, f_maps, apply_pooling, basic_module):
         super(UNet3D, self).__init__(in_channels=in_channels, out_channels=out_channels,
-                                     f_maps=f_maps, apply_pooling=apply_pooling,
-                                    basic_module=basic_module)
+                                     f_maps=f_maps, apply_pooling=apply_pooling, basic_module=basic_module)
 
 
 if __name__ == '__main__':
