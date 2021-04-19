@@ -84,7 +84,7 @@ class GeneralizedDiceLoss(nn.Module):
 class BCEDiceLoss(nn.Module):
     """Linear combination of BCE and Dice losses"""
 
-    def __init__(self, alpha=1.0, beta=1.0):
+    def __init__(self, alpha=0.5, beta=0.5):
         super(BCEDiceLoss, self).__init__()
         self.alpha = alpha
         self.bce = nn.BCELoss()

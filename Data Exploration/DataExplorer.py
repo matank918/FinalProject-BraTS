@@ -1,6 +1,7 @@
 import nibabel as nib
 import torch
 import matplotlib.pyplot as plt
+import torchvision
 import numpy as np
 import os
 from CustomTransformations import LoadData, ToTensor, CustomNormalize, RandomCrop3D, OneHotEncoding3d
@@ -44,31 +45,31 @@ def histogram_image(image):
 
 if __name__ == '__main__':
     # set all needed transformation
-    dir = r"C:\Users\User\Documents\FinalProject\MICA BRaTS2018\Training\HGG\Brats18_2013_2_1"
+    dir = r"/tcmldrive/databases/Public/MICA BRaTS2018/Training/HGG/Brats18_2013_2_1"
     load_data = LoadData()
     data, label, image_names = load_data(dir, with_names=True)
-    to_tensor = ToTensor()
-    normalize = CustomNormalize()
+    data_transforms = torchvision.transforms.Compose([ToTensor(), CustomNormalize()])
+    gt_transforms = torchvision.transforms.Compose([OneHotEncoding3d(label.shape), ToTensor()])
+
     net_dim = (128, 128, 128)
     rand_crop = RandomCrop3D(data.shape, net_dim)
-    one_hot = OneHotEncoding3d(label.shape)
-    # load data
-    # # data, label = rand_crop(to_tensor(data), to_tensor(one_hot(label)))
-    data, label = rand_crop(normalize(to_tensor(data)), to_tensor(one_hot(label)))
-    # data = normalize(to_tensor(data))
-    # # display data
-    # mri1, mri2, mri3, mri4 = split_channels(data, dim=0)
-    # ch0, ch1, ch2, ch4 = split_channels(label, dim=0)
-    # show_image(mri1, image_names[0])
-    # show_image(mri2, image_names[1])
-    # show_image(mri3, image_names[2])
-    # show_image(mri4, image_names[3])
-    # show_image(ch0, "ch0")
-    # show_image(ch1, "ch1")
-    # show_image(ch2, "ch2")
-    # show_image(ch4, "ch4")
 
-    # Sagittal_ch1, Coronal_ch1, Horizontal_ch1 = split_image(ch1)
+    data = data_transforms(data)
+    label = gt_transforms(label)
 
-    # histogram_image(mri1)
+    data, label = rand_crop(data, label)
+
+    mri1, mri2, mri3, mri4 = split_channels(data, dim=0)
+    ch1, ch2, ch4 = split_channels(label, dim=0, chunk=3)
+    show_image(mri1, image_names[0])
+    show_image(mri2, image_names[1])
+    show_image(mri3, image_names[2])
+    show_image(mri4, image_names[3])
+    show_image(ch1, "ch1")
+    show_image(ch2, "ch2")
+    show_image(ch4, "ch4")
+
+    Sagittal_ch1, Coronal_ch1, Horizontal_ch1 = split_image(ch1)
+
+    histogram_image(mri1)
 

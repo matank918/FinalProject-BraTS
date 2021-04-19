@@ -5,7 +5,7 @@ import torch.optim as optim
 from torch.utils.data import DataLoader, random_split
 from utils import get_number_of_learnable_parameters, get_logger
 from trainer import UNet3DTrainer
-from DataLoader.CustomDataSet import BasicDataset
+from DataLoader.CustomDataSet import CustomDataset
 from Loss.loss import create_loss
 from Loss.metrics import create_eval
 import config as cfg
@@ -21,7 +21,7 @@ def _get_model():
 
 
 def _get_train_loaders():
-    dataset = BasicDataset(cfg.loader_path)
+    dataset = CustomDataset(cfg.loader_path)
     n_val = int(len(dataset) * cfg.val_percent)
     n_train = len(dataset) - n_val
     train, val = random_split(dataset, [n_train, n_val])

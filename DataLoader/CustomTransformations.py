@@ -29,7 +29,7 @@ class LoadData(object):
 
 class OneHotEncoding3d(object):
     def __init__(self, dim):
-        self.values = np.array([0, 1, 2, 4])
+        self.values = np.array([1, 2, 4])
         self.one_hot = np.zeros((len(self.values),) + dim)
 
     def __call__(self, label):
@@ -51,7 +51,7 @@ class RandomCrop3D(object):
         self.crop_dim = tuple(crop_dim)
 
     def __call__(self, data, label):
-        assert data.shape == label.shape
+        assert data.shape[1:] == label.shape[1:]
         slice_hwd = [self._get_slice(i, k) for i, k in zip(self.img_dim, self.crop_dim)]
         return self._crop(data, *slice_hwd), self._crop(label, *slice_hwd)
 

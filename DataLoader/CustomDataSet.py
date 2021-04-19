@@ -1,24 +1,29 @@
 import os
+import torch
 from torch.utils.data import Dataset
-from torchvision import transforms
+import torchvision
 from DataLoader.CustomTransformations import RandomCrop3D, LoadData, OneHotEncoding3d, ToTensor, CustomNormalize
 
 
-class BasicDataset(Dataset):
-    def __init__(self, data_dir, transforms=None, net_dim=(128, 128, 128)):
+class CustomDataset(Dataset):
+    def __init__(self, data_dir, transforms=None, data_dim=(240,240,155), net_dim=(128, 128, 128)):
         """:param images_dir: (str)"""
 
         self.dir = data_dir
-        self.training_dir = data_dir + '/' + 'Training'
+        self.training_dir = data_dir
         # self.validation_dir = data_dir + '\\' + 'validation'
         self.cancer_type = ['HGG', 'LGG']
         self.training_data = []
         self.validation_data = []
-
-        self.folder_names = []
         self.net_dim = net_dim
+        self.folder_names = []
         self.transforms = transforms
         self.load_data = LoadData()
+
+        if transforms is None:
+            self.data_transforms = torchvision.transforms.Compose([ToTensor(), CustomNormalize()])
+            self.gt_transforms = torchvision.transforms.Compose([OneHotEncoding3d(data_dim), ToTensor()])
+
         self.get_folder_names()
 
     def get_folder_names(self):
@@ -39,22 +44,19 @@ class BasicDataset(Dataset):
 
     def __getitem__(self, i):
         data, label = self.load_data(self.folder_names[i])
-        data, label = self.basic_transform(data, label)
-        # data, label = self.transforms(data, label)
+        data = self.data_transforms(data)
+        label = self.gt_transforms(label)
+
+        self.rand_crop = RandomCrop3D(data.shape, self.net_dim)
+
+        data, label = self.rand_crop(data,label)
         return data, label
 
-    def basic_transform(self, data, label):
-        one_hot = OneHotEncoding3d(label.shape)
-        rand_crop = RandomCrop3D(data.shape, self.net_dim)
-        to_tensor = ToTensor()
-        normalize = CustomNormalize()
-
-        return rand_crop(normalize(to_tensor(data)), to_tensor(one_hot(label)))
 
 
 if __name__ == '__main__':
-    dir = r"C:\Users\User\Documents\FinalProject\MICA BRaTS2018"
-    transformations = transforms.Compose([ToTensor()])
-    Dataset = BasicDataset(dir, transformations)
+    dir = r"/tcmldrive/databases/Public/MICA BRaTS2018"
+    # transformations = transforms.Compose([ToTensor()])
+    Dataset = CustomDataset(dir)
     data, label = Dataset.__getitem__(5)
 
