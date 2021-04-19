@@ -12,7 +12,7 @@ class CustomDataset(Dataset):
         self.dir = data_dir
         self.training_dir = data_dir
         # self.validation_dir = data_dir + '\\' + 'validation'
-        self.cancer_type = ['HGG', 'LGG']
+        # self.cancer_type = ['HGG', 'LGG']
         self.training_data = []
         self.validation_data = []
         self.net_dim = net_dim
@@ -28,15 +28,14 @@ class CustomDataset(Dataset):
 
     def get_folder_names(self):
         """create a list of paths for each MRI image's folder"""
-        for cancer_type in self.cancer_type:
-            file_dir = os.path.join(self.training_dir, cancer_type)
-            self.training_data = self.training_data + [os.path.join(file_dir, dI) for dI in os.listdir(file_dir) if
-                                                     os.path.isdir(os.path.join(file_dir, dI))]
-
+        # for cancer_type in self.cancer_type:
+        #     file_dir = os.path.join(self.training_dir, cancer_type)
+        self.folder_names = [os.path.join(self.training_dir, dI) for dI in os.listdir(self.training_dir) if
+                                                 os.path.isdir(os.path.join(self.training_dir, dI))]
         # self.validation_data = [os.path.join(self.validation_dir, dI) for dI in os.listdir(self.validation_dir) if
         #                                              os.path.isdir(os.path.join(self.validation_dir, dI))]
 
-        self.folder_names = self.training_data + self.validation_data
+        # self.folder_names = self.training_data + self.validation_data
 
     def __len__(self):
         """:return (int): return length of the list "folder_names"""
@@ -55,8 +54,9 @@ class CustomDataset(Dataset):
 
 
 if __name__ == '__main__':
-    dir = r"/tcmldrive/databases/Public/MICA BRaTS2018"
+    dir = r"/home/kachel/MICA BraTS2020/"
     # transformations = transforms.Compose([ToTensor()])
     Dataset = CustomDataset(dir)
+    print(Dataset.__len__())
     data, label = Dataset.__getitem__(5)
 
