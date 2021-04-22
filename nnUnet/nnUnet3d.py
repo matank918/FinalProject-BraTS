@@ -1,9 +1,8 @@
-import importlib
 import torch
 import torch.nn as nn
 from UnetParts import Encoder, Decoder
-from BuildingBlocks import DoubleConv, SingleConv
-from utils import get_number_of_learnable_parameters
+from BuildingBlocks import DoubleConv
+from utils.utils import get_number_of_learnable_parameters
 
 
 class Abstract3DUNet(nn.Module):

@@ -1,11 +1,8 @@
-import os
-import numpy as np
 import torch
 import torch.nn as nn
 from torch.utils.tensorboard import SummaryWriter
-from utils import RunningAverage, save_checkpoint, split_image, split_channels
+from utils.utils import RunningAverage, save_checkpoint, split_image, split_channels
 from torch.optim.lr_scheduler import ReduceLROnPlateau
-import time
 
 
 class UNet3DTrainer:
@@ -100,7 +97,7 @@ class UNet3DTrainer:
         self.model.train()
         for batch in self.loaders['train']:
 
-            self.logger.info(f'Training iteration [{self.num_iterations}/{self.max_num_iterations}]. '
+            print(f'Training iteration [{self.num_iterations}/{self.max_num_iterations}]. '
                              f'Epoch [{self.num_epoch}/{self.max_num_epochs}]')
 
             # splits between input and target
@@ -162,7 +159,7 @@ class UNet3DTrainer:
 
     def validate(self):
 
-        self.logger.info('Validating...')
+        print('Validating...')
 
         val_losses = RunningAverage()
         val_scores = RunningAverage()

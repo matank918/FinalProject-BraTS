@@ -3,14 +3,15 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, random_split
-from utils import get_number_of_learnable_parameters, get_logger
+from utils.utils import get_number_of_learnable_parameters
+from utils.Log import get_logger, get_module_variable
 from trainer import UNet3DTrainer
 from DataLoader.CustomDataSet import CustomDataset
 from Loss.loss import create_loss
 from Loss.metrics import create_eval
 import config as cfg
 from nnUnet.nnUnet3d import UNet3D
-
+import logging
 
 def _get_model():
     module = importlib.import_module(cfg.module_name)
@@ -66,8 +67,8 @@ def _create_lr_scheduler(optimizer):
 
 if __name__ == '__main__':
     # Load and log experiment configuration
-    logger = get_logger('UNet3DTrain')
-    logger.info(cfg)
+    logger = get_logger(cfg.log_path)
+    logger.info(get_module_variable(cfg))
 
     # Create the model
     model = _get_model()

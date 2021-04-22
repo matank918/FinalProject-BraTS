@@ -1,5 +1,4 @@
 import logging
-import sys
 import numpy as np
 import ast
 import os
@@ -61,21 +60,6 @@ class RunningAverage:
         self.avg = self.sum / self.count
 
 
-def get_logger(name, level=logging.DEBUG):
-    logger = logging.getLogger(name)
-    logger.setLevel(level)
-    # Logging to console
-    c_handle = logging.StreamHandler(sys.stdout)
-    c_format = logging.Formatter('%(name)s - %(levelname)s - %(message)s')
-    c_handle.setFormatter(c_format)
-    logger.addHandler(c_handle)
-    # logging to file
-    f_handler = logging.FileHandler('file.log')
-    f_format = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    f_handler.setFormatter(f_format)
-    logger.addHandler(f_handler)
-
-    return logger
 
 
 def get_number_of_learnable_parameters(model):

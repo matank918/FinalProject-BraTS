@@ -1,11 +1,8 @@
-import nibabel as nib
 import torch
 import matplotlib.pyplot as plt
 import torchvision
-import numpy as np
-import os
 from CustomTransformations import LoadData, ToTensor, CustomNormalize, RandomCrop3D, OneHotEncoding3d
-from utils import split_image, split_channels
+from utils.utils import split_image, split_channels
 
 
 def show_image(image, name):

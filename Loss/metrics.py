@@ -1,8 +1,6 @@
 import torch
-import torch.nn.functional as F
 from torch import nn as nn
-from torch.autograd import Variable
-from utils import flatten
+from utils.utils import flatten
 
 
 class _AbstractDiceMetric(nn.Module):
