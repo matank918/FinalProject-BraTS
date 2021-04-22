@@ -42,8 +42,8 @@ class Decoder(nn.Module):
         # Dout=(Din−1)×stride[0]−2×padding[0] + dilation[0]×(kernel_size[0]−1) + output_padding[0] + 1
         self.Upsample = nn.ConvTranspose3d(in_channels, in_channels, kernel_size=3,
                                            stride=2, padding=1, output_padding=1)
-
-        self.basic_module = basic_module(2*in_channels, out_channels, stride_first_layer=1)
+        double_conv_feat = 2*in_channels
+        self.basic_module = basic_module(double_conv_feat, out_channels, stride_first_layer=1)
 
     def forward(self, encoder_features, x1):
         x1 = self.Upsample(x1)

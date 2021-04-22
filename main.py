@@ -9,7 +9,7 @@ from trainer import UNet3DTrainer
 from DataLoader.CustomDataSet import CustomDataset
 from Loss.loss import create_loss
 from Loss.metrics import create_eval
-import config as cfg
+import utils.config as cfg
 from nnUnet.nnUnet3d import UNet3D
 import logging
 

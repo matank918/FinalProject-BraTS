@@ -3,8 +3,6 @@ import sys
 from datetime import date, datetime
 import os
 import socket
-import platform
-import config as cfg
 
 
 def get_logger(path, level=logging.INFO):

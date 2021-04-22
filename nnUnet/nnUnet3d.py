@@ -30,23 +30,26 @@ class Abstract3DUNet(nn.Module):
 
         #  create decoder path consisting of the Decoder modules. The length of the decoder is equal to len(f_maps) - 1
         decoders = []
-        final_activation_layers = []
+        output_activation_layers = []
         reversed_f_maps = list(reversed(f_maps))[1:]
         reversed_f_maps.append(out_channels)
-        print(reversed_f_maps)
         for i in range(1, len(reversed_f_maps)):
             in_feature_num = reversed_f_maps[i - 1]
             out_feature_num = reversed_f_maps[i]
+            if i > 1:
+                # no activation layer for first level in the decoder
+                decoder = Decoder(in_feature_num, in_feature_num, basic_module=basic_module)
+            else:
+                decoder = Decoder(in_feature_num, out_feature_num, basic_module=basic_module)
 
-            decoder = Decoder(in_feature_num, in_feature_num, basic_module=basic_module)
-            final_activation = nn.Sequential(nn.Conv3d(in_feature_num, out_feature_num, kernel_size=1), nn.Softmax(dim=1))
+            output_activation = nn.Sequential(nn.Conv3d(in_feature_num, out_feature_num, kernel_size=1), nn.Softmax(dim=1))
             decoders.append(decoder)
-            final_activation_layers.append(final_activation)
+            output_activation_layers.append(output_activation)
 
         self.decoders = nn.ModuleList(decoders)
-        self.final_activation = nn.ModuleList(final_activation_layers)
-        print(self.decoders)
-        print(self.final_activation)
+        self.output_activation = nn.ModuleList(output_activation_layers[1:])
+        # print(self.decoders)
+        # print(self.output_activation)
 
     def forward(self, x):
         # encoder part
@@ -64,9 +67,12 @@ class Abstract3DUNet(nn.Module):
         for i, (decoder, encoder_features) in enumerate(zip(self.decoders, encoders_features)):
             # pass the output from the corresponding encoder and the output of the previous decoder
             x = decoder(encoder_features, x)
-            final_activation = self.final_activation[i]
-            x = final_activation(x)
-            # print("decoder:", x.size())
+            if i > 0:
+                # no activation layer for first level in the decoder
+                output_activation = self.output_activation[i-1]
+                x = output_activation(x)
+
+            print("decoder:", x.size())
 
         return x
 

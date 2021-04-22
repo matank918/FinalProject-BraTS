@@ -1,5 +1,6 @@
 import torch.nn as nn
 
+
 class DoubleConv(nn.Module):
     """(convolution => [IN] => LeakyReLU) * 2
       Args:
@@ -10,7 +11,7 @@ class DoubleConv(nn.Module):
 
     def __init__(self, in_channels, out_channels, stride_first_layer):
         super().__init__()
-        #D_out=((D_in+2×padding[0]−dilation[0]×(kernel_size[0]−1)−1)/stride[0])+1
+        # D_out=((D_in+2×padding[0]−dilation[0]×(kernel_size[0]−1)−1)/stride[0])+1
         self.double_conv = nn.Sequential(
             nn.Conv3d(in_channels, out_channels, kernel_size=3, padding=1,
                       stride=stride_first_layer),
@@ -35,7 +36,7 @@ class SingleConv(nn.Module):
 
     def __init__(self, in_channels, out_channels, stride_first_layer):
         super().__init__()
-        #D_out=((D_in+2×padding[0]−dilation[0]×(kernel_size[0]−1)−1)/stride[0])+1
+        # D_out=((D_in+2×padding[0]−dilation[0]×(kernel_size[0]−1)−1)/stride[0])+1
         self.Single_conv = nn.Sequential(
             nn.Conv3d(in_channels, out_channels, kernel_size=3, padding=1,
                       stride=stride_first_layer),
