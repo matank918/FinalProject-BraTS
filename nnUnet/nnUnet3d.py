@@ -36,24 +36,23 @@ class Abstract3DUNet(nn.Module):
         for i in range(1, len(reversed_f_maps)):
             in_feature_num = reversed_f_maps[i - 1]
             out_feature_num = reversed_f_maps[i]
-            if i > 1:
-                # no activation layer for first level in the decoder
-                decoder = Decoder(in_feature_num, in_feature_num, basic_module=basic_module)
-            else:
-                decoder = Decoder(in_feature_num, out_feature_num, basic_module=basic_module)
 
-            output_activation = nn.Sequential(nn.Conv3d(in_feature_num, out_feature_num, kernel_size=1), nn.Softmax(dim=1))
+            decoder = Decoder(in_feature_num, out_feature_num, basic_module=basic_module)
+            output_activation = nn.Sequential(nn.Conv3d(out_feature_num, out_channels, kernel_size=(1, 1, 1)),
+                                              nn.Softmax(dim=1))
             decoders.append(decoder)
             output_activation_layers.append(output_activation)
 
         self.decoders = nn.ModuleList(decoders)
-        self.output_activation = nn.ModuleList(output_activation_layers[1:])
-        # print(self.decoders)
-        # print(self.output_activation)
+        self.output_activation = nn.ModuleList(output_activation_layers)
+
+        print(self.decoders)
+        print(self.output_activation)
 
     def forward(self, x):
         # encoder part
         encoders_features = []
+        decoders_features = []
         for encoder in self.encoders:
             x = encoder(x)
             # reverse the encoder outputs to be aligned with the decoder
@@ -67,13 +66,13 @@ class Abstract3DUNet(nn.Module):
         for i, (decoder, encoder_features) in enumerate(zip(self.decoders, encoders_features)):
             # pass the output from the corresponding encoder and the output of the previous decoder
             x = decoder(encoder_features, x)
+            # no activation layer for first layer
             if i > 0:
-                # no activation layer for first level in the decoder
-                output_activation = self.output_activation[i-1]
-                x = output_activation(x)
+                output_activation = self.output_activation[i]
+                decoders_features.append(output_activation(x))
 
-            print("decoder:", x.size())
-
+            # print("decoder:", x.size())
+        x = decoders_features[-1]
         return x
 
 
@@ -90,5 +89,5 @@ if __name__ == '__main__':
     model = UNet3D(4, 4, f_maps, apply_pooling=False, basic_module=DoubleConv)
     model.to(device)
     rand_image = torch.rand(1, 4, 128, 128, 128).to(device)
-    print(get_number_of_learnable_parameters(model))
+    # print(get_number_of_learnable_parameters(model))
     (model(rand_image))

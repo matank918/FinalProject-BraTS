@@ -36,7 +36,7 @@ class UNet3DTrainer:
                  eval_criterion, device, loaders, num_iterations
                  , validate_iters, checkpoint_dir, best_eval_score,
                  validate_after_iters, log_after_iters, num_epoch, max_num_iterations, eval_score_higher_is_better,
-                 max_num_epochs):
+                 max_num_epochs, accumulation_steps):
 
         self.logger = logger
         self.writer = SummaryWriter()
@@ -44,6 +44,7 @@ class UNet3DTrainer:
         self.model = model
         self.optimizer = optimizer
         self.scheduler = lr_scheduler
+        self.accumulation_steps = accumulation_steps
         self.loss_criterion = loss_criterion
         self.eval_criterion = eval_criterion
         self.device = device
@@ -98,7 +99,7 @@ class UNet3DTrainer:
         for batch in self.loaders['train']:
 
             print(f'Training iteration [{self.num_iterations}/{self.max_num_iterations}]. '
-                             f'Epoch [{self.num_epoch}/{self.max_num_epochs}]')
+                  f'Epoch [{self.num_epoch}/{self.max_num_epochs}]')
 
             # splits between input and target
             input, target = self._split_training_batch(batch)
@@ -111,10 +112,12 @@ class UNet3DTrainer:
             eval_score = self.eval_criterion(output, target)
             train_eval_scores.update(eval_score.item(), self._batch_size(input))
 
-            # compute gradients and update parameters
-            self.optimizer.zero_grad()
+            loss = loss / self.accumulation_steps
             loss.backward()
-            self.optimizer.step()
+            # compute gradients and update parameters
+            if self.num_iterations % self.accumulation_steps == 0:
+                self.optimizer.zero_grad()
+                self.optimizer.step()
 
             if self.num_iterations % self.validate_after_iters == 0:
                 # set the model in eval mode
@@ -141,7 +144,6 @@ class UNet3DTrainer:
                 self._save_checkpoint(is_best)
 
             if self.num_iterations % self.log_after_iters == 0:
-
                 # log stats, params and images
                 self.logger.info(
                     f'Training stats. Loss: {train_losses.avg}. Evaluation score: {train_eval_scores.avg}')
@@ -271,8 +273,11 @@ class UNet3DTrainer:
 
     def _log_params(self):
         for name, value in self.model.named_parameters():
-            self.writer.add_histogram(name, value.data.cpu().numpy(), self.num_iterations)
-            self.writer.add_histogram(name + '/grad', value.grad.data.cpu().numpy(), self.num_iterations)
+            try:
+                self.writer.add_histogram(name, value.data.cpu().numpy(), self.num_iterations)
+                self.writer.add_histogram(name + '/grad', value.grad.data.cpu().numpy(), self.num_iterations)
+            except AttributeError as e:
+                print(e)
 
     def _log_images(self, input, target, prediction, prefix):
         if self._batch_size(input) == 1:
@@ -317,3 +322,4 @@ class UNet3DTrainer:
             return input[0].size(0)
         else:
             return input.size(0)
+

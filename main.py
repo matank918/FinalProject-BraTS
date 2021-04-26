@@ -50,7 +50,8 @@ def _create_trainer(model, device, optimizer, lr_scheduler, loss_criterion, eval
                          validate_after_iters=cfg.validate_after_iters,
                          log_after_iters=cfg.log_after_iters,
                          num_epoch=cfg.num_epoch, max_num_iterations=cfg.max_num_iterations,
-                         eval_score_higher_is_better=cfg.eval_score_higher_is_better, max_num_epochs=cfg.max_num_epochs)
+                         eval_score_higher_is_better=cfg.eval_score_higher_is_better, max_num_epochs=cfg.max_num_epochs,
+                         accumulation_steps=cfg.accumulation_steps)
 
 
 def _create_optimizer(model):

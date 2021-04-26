@@ -7,6 +7,7 @@ Created on Wed May 27 17:19:37 2020
 
 # general
 log_path = r'/home/kachel/Project/runs/'
+run_purpose = "Dry runs"
 
 #model
 model_name = 'UNet3D'
@@ -18,8 +19,8 @@ f_maps = [32, 64, 128, 256, 320, 320]
 apply_pooling = False
 
 #loss and eveal
-# loss_name = 'DiceLoss'
-loss_name = 'BCEDiceLoss'
+loss_name = 'DiceLoss'
+# loss_name = 'BCEDiceLoss'
 # loss_name = 'GeneralizedDiceLoss'
 eval_name = 'DiceMetric'
 
@@ -34,10 +35,11 @@ optimizer_name = 'SGD'
 learning_rate = 0.01
 momentum = 0.99
 nesterov = True
+accumulation_steps = 4
 
 #train
-log_after_iters = 90
-validate_after_iters = 90
+log_after_iters = 2
+validate_after_iters = 2
 validate_iters = 40
 
 max_num_epochs = 50
@@ -48,3 +50,9 @@ eval_score_higher_is_better = True
 checkpoint_dir = r'/home/kachel/Project/checkpoint/'
 num_epoch = 1
 num_iterations = 1
+
+# architecture
+kernel_size = (3, 3, 3)
+padding = (1, 1, 1)
+stride = (2,2,2)
+output_padding =(1, 1, 1)
