@@ -10,7 +10,6 @@ def get_logger(path, level=logging.INFO):
     cwd = os.getcwd()
     os.chdir(path)
     logging.basicConfig(filename=log_name, level=level)
-    os.chdir(cwd)
     logger = logging.getLogger()
 
     # Logging to console
@@ -24,7 +23,7 @@ def get_logger(path, level=logging.INFO):
     f_format = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     f_handler.setFormatter(f_format)
     logger.addHandler(f_handler)
-
+    os.chdir(cwd)
     return logger
 
 

@@ -112,12 +112,15 @@ class UNet3DTrainer:
             eval_score = self.eval_criterion(output, target)
             train_eval_scores.update(eval_score.item(), self._batch_size(input))
 
-            loss = loss / self.accumulation_steps
+            # loss = loss / self.accumulation_steps
+
+            self.optimizer.zero_grad()
             loss.backward()
+            self.optimizer.step()
+
             # compute gradients and update parameters
-            if self.num_iterations % self.accumulation_steps == 0:
-                self.optimizer.zero_grad()
-                self.optimizer.step()
+            # if self.num_iterations % self.accumulation_steps == 0:
+            #     self.optimizer.step()
 
             if self.num_iterations % self.validate_after_iters == 0:
                 # set the model in eval mode
@@ -200,7 +203,12 @@ class UNet3DTrainer:
         output = self.model(input)
 
         # compute the loss
-        loss = self.loss_criterion(output, target)
+        loss = self.loss_criterion(output[-1], target)
+        if self.model.training:
+            for layer_output in output[:len(output)-1]:
+                loss += self.loss_criterion(layer_output, target)
+
+        output = output[-1]
 
         return output, loss
 
@@ -277,7 +285,7 @@ class UNet3DTrainer:
                 self.writer.add_histogram(name, value.data.cpu().numpy(), self.num_iterations)
                 self.writer.add_histogram(name + '/grad', value.grad.data.cpu().numpy(), self.num_iterations)
             except AttributeError as e:
-                print(e)
+                pass
 
     def _log_images(self, input, target, prediction, prefix):
         if self._batch_size(input) == 1:

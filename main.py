@@ -18,7 +18,7 @@ def _get_model():
     basic_block = getattr(module, cfg.basic_block)
     return UNet3D(in_channels=cfg.in_channels, out_channels=cfg.out_channels, f_maps=cfg.f_maps,
                   apply_pooling=cfg.apply_pooling
-                  ,basic_module=basic_block)
+                  ,basic_module=basic_block, deep_supervision=cfg.deep_supervision)
 
 
 def _get_train_loaders():
@@ -69,6 +69,7 @@ def _create_lr_scheduler(optimizer):
 if __name__ == '__main__':
     # Load and log experiment configuration
     logger = get_logger(cfg.log_path)
+    logger.info(cfg.run_purpose)
     logger.info(get_module_variable(cfg))
 
     # Create the model

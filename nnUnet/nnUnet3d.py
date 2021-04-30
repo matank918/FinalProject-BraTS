@@ -3,18 +3,21 @@ import torch.nn as nn
 from UnetParts import Encoder, Decoder
 from BuildingBlocks import DoubleConv
 from utils.utils import get_number_of_learnable_parameters
-
+import copy
 
 class Abstract3DUNet(nn.Module):
 
-    def __init__(self, in_channels, out_channels, f_maps, apply_pooling, basic_module=DoubleConv):
+    def __init__(self, in_channels, out_channels, f_maps, apply_pooling, deep_supervision, basic_module=DoubleConv):
         """
           Args:
               :param in_channels:(int) number of input channels
               :param out_channels: (int) number of output segmentation masks;
               :param f_maps: (list) number of feature maps at each level of the encoder
               :param basic_module: (nn.Module) the base module for the net (default is DoubleConv)
+              :param deep_supervision: (int) apply deep supervision for number of layer.
           """
+        self.deep_supervision = deep_supervision
+
         super(Abstract3DUNet, self).__init__()
 
         # create encoder path consisting of Encoder modules. Depth of the encoder is equal to `len(f_maps)`
@@ -51,6 +54,7 @@ class Abstract3DUNet(nn.Module):
 
     def forward(self, x):
         # encoder part
+        input_dim = (128,128,128)
         encoders_features = []
         decoders_features = []
         for encoder in self.encoders:
@@ -67,27 +71,31 @@ class Abstract3DUNet(nn.Module):
             # pass the output from the corresponding encoder and the output of the previous decoder
             x = decoder(encoder_features, x)
             # no activation layer for first layer
-            if i > 0:
+            if i > (4-self.deep_supervision):
                 output_activation = self.output_activation[i]
-                decoders_features.append(output_activation(x))
+                encoders_feat = nn.functional.interpolate(output_activation(x), size=input_dim, mode='trilinear')
+                decoders_features.append(encoders_feat)
 
-            # print("decoder:", x.size())
-        x = decoders_features[-1]
-        return x
+        return decoders_features
 
 
 class UNet3D(Abstract3DUNet):
-    def __init__(self, in_channels, out_channels, f_maps, apply_pooling, basic_module):
+    def __init__(self, in_channels, out_channels, f_maps, apply_pooling, basic_module, deep_supervision):
         super(UNet3D, self).__init__(in_channels=in_channels, out_channels=out_channels,
-                                     f_maps=f_maps, apply_pooling=apply_pooling, basic_module=basic_module)
+                                     f_maps=f_maps, apply_pooling=apply_pooling, basic_module=basic_module,
+                                     deep_supervision=deep_supervision)
 
 
 if __name__ == '__main__':
     torch.cuda.empty_cache()
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     f_maps = [32, 64, 128, 256, 320, 320]
-    model = UNet3D(4, 4, f_maps, apply_pooling=False, basic_module=DoubleConv)
+    model = UNet3D(4, 4, f_maps, apply_pooling=False, basic_module=DoubleConv, deep_supervision=3)
     model.to(device)
+    x = model.training
+    print(1)
     rand_image = torch.rand(1, 4, 128, 128, 128).to(device)
+
     # print(get_number_of_learnable_parameters(model))
     (model(rand_image))
+

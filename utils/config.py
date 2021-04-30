@@ -7,7 +7,10 @@ Created on Wed May 27 17:19:37 2020
 
 # general
 log_path = r'/home/kachel/Project/runs/'
-run_purpose = "Dry runs"
+# run_purpose = "softmax experiment #1 - run with softmax in the decoder output " \
+#               "run with SGD, batch_size=2, and DiceLoss accumulation_steps=1 and without deep supervision"
+
+run_purpose = "bug in trainer?"
 
 #model
 model_name = 'UNet3D'
@@ -27,19 +30,20 @@ eval_name = 'DiceMetric'
 #loader
 loader_path =r'/home/kachel/MICA BraTS2020/'
 val_percent = 0.1
-batch_size = 2
+batch_size = 1
 
 #optimizer
+deep_supervision = 4
 optimizer_name = 'SGD'
 # optimizer_name = 'Adam'
 learning_rate = 0.01
 momentum = 0.99
 nesterov = True
-accumulation_steps = 4
+accumulation_steps = 1
 
 #train
-log_after_iters = 2
-validate_after_iters = 2
+log_after_iters = 25
+validate_after_iters = 25
 validate_iters = 40
 
 max_num_epochs = 50
