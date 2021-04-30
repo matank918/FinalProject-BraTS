@@ -19,23 +19,6 @@ def flatten(tensor):
     # Flatten: (C, N, D, H, W) -> (C, N * D * H * W)
     return transposed.contiguous().view(C, -1)
 
-def split_channels(image, dim=1, chunk=4):
-    if chunk ==4:
-        ch0, ch1, ch2, ch4 = torch.chunk(image, dim=dim, chunks=chunk)
-        ch0 = torch.squeeze(ch0)
-        ch1 = torch.squeeze(ch1)
-        ch2 = torch.squeeze(ch2)
-        ch4 = torch.squeeze(ch4)
-        return ch0, ch1, ch2, ch4
-    elif chunk ==3:
-        ch1, ch2, ch4 = torch.chunk(image, dim=dim, chunks=chunk)
-        ch1 = torch.squeeze(ch1)
-        ch2 = torch.squeeze(ch2)
-        ch4 = torch.squeeze(ch4)
-        return ch1, ch2, ch4
-
-
-
 def split_image(image):
     Sagittal = torch.unsqueeze(image[image.shape[0] // 2], 0)
     Coronal = torch.unsqueeze(image[:, image.shape[1] // 2], 0)

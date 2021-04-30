@@ -2,7 +2,7 @@ import torch
 import matplotlib.pyplot as plt
 import torchvision
 from CustomTransformations import LoadData, ToTensor, CustomNormalize, RandomCrop3D, OneHotEncoding3d
-from utils.utils import split_image, split_channels
+from utils.utils import split_image
 
 
 def show_image(image, name):
@@ -56,17 +56,30 @@ if __name__ == '__main__':
 
     data, label = rand_crop(data, label)
 
-    mri1, mri2, mri3, mri4 = split_channels(data, dim=0)
-    ch1, ch2, ch4 = split_channels(label, dim=0, chunk=3)
+    mri1, mri2, mri3, mri4 = torch.chunk(data, dim=0, chunks=4)
+    mri1 = torch.squeeze(mri1)
+    mri2 = torch.squeeze(mri2)
+    mri3 = torch.squeeze(mri3)
+    mri4 = torch.squeeze(mri4)
+
     show_image(mri1, image_names[0])
     show_image(mri2, image_names[1])
     show_image(mri3, image_names[2])
     show_image(mri4, image_names[3])
+
+    _, ch1, ch2, ch4 = torch.chunk(label, dim=0, chunks=4)
+    ch1 = torch.squeeze(ch1)
+    ch2 = torch.squeeze(ch2)
+    ch4 = torch.squeeze(ch4)
+
     show_image(ch1, "ch1")
     show_image(ch2, "ch2")
     show_image(ch4, "ch4")
 
     Sagittal_ch1, Coronal_ch1, Horizontal_ch1 = split_image(ch1)
 
-    histogram_image(mri1)
+    Sagittal_ch1 = torch.squeeze(Sagittal_ch1)
+    Coronal_ch1 = torch.squeeze(Coronal_ch1)
+    Horizontal_ch1 = torch.squeeze(Horizontal_ch1)
 
+    histogram_image(mri1)
