@@ -69,6 +69,8 @@ def _create_lr_scheduler(optimizer):
 if __name__ == '__main__':
     # Load and log experiment configuration
     logger = get_logger(cfg.log_path)
+    logger.info(cfg.id)
+    logger.info(cfg.run_name)
     logger.info(cfg.run_purpose)
     logger.info(get_module_variable(cfg))
 

@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from torch.utils.tensorboard import SummaryWriter
-from utils.utils import RunningAverage, save_checkpoint, split_image, split_channels
+from utils.utils import RunningAverage, save_checkpoint, split_image
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 
@@ -112,15 +112,14 @@ class UNet3DTrainer:
             eval_score = self.eval_criterion(output, target)
             train_eval_scores.update(eval_score.item(), self._batch_size(input))
 
-            # loss = loss / self.accumulation_steps
-
-            self.optimizer.zero_grad()
+            loss = loss / self.accumulation_steps
             loss.backward()
-            self.optimizer.step()
+            # self.optimizer.step()
 
             # compute gradients and update parameters
-            # if self.num_iterations % self.accumulation_steps == 0:
-            #     self.optimizer.step()
+            if self.num_iterations % self.accumulation_steps == 0:
+                self.optimizer.step()
+                self.optimizer.zero_grad()
 
             if self.num_iterations % self.validate_after_iters == 0:
                 # set the model in eval mode
@@ -178,7 +177,8 @@ class UNet3DTrainer:
                 val_losses.update(loss.item(), self._batch_size(input))
 
                 if i % 100 == 0:
-                    self._log_images(input, target, output, 'val_')
+                    pass
+                    # self._log_images(input, target, output, 'val_')
 
                 eval_score = self.eval_criterion(output, target)
                 val_scores.update(eval_score.item(), self._batch_size(input))
@@ -201,11 +201,11 @@ class UNet3DTrainer:
     def _forward_pass(self, input, target):
         # forward pass
         output = self.model(input)
-
+        fin_output = output[-1]
         # compute the loss
-        loss = self.loss_criterion(output[-1], target)
+        loss = self.loss_criterion(fin_output, target)
         if self.model.training:
-            for layer_output in output[:len(output)-1]:
+            for layer_output in output[:-1]:
                 loss += self.loss_criterion(layer_output, target)
 
         output = output[-1]
@@ -289,12 +289,12 @@ class UNet3DTrainer:
 
     def _log_images(self, input, target, prediction, prefix):
         if self._batch_size(input) == 1:
-            _, ch1, ch2, ch4 = split_channels(target)
+            _, ch1, ch2, ch4 = torch.chunk(target, dim=1, chunks=4)
             Sagittal_ch1, Coronal_ch1, Horizontal_ch1 = split_image(ch1)
             Sagittal_ch2, Coronal_ch2, Horizontal_ch2 = split_image(ch2)
             Sagittal_ch4, Coronal_ch4, Horizontal_ch4 = split_image(ch4)
 
-            _, pred_ch1, pred_ch2, pred_ch4 = split_channels(prediction)
+            _, pred_ch1, pred_ch2, pred_ch4 = torch.chunk(prediction, dim=1, chunks=4)
             Sagittal_pred_ch1, Coronal_pred_ch1, Horizontal_pred_ch1 = split_image(pred_ch1)
             Sagittal_pred_ch2, Coronal_pred_ch2, Horizontal_pred_ch2 = split_image(pred_ch2)
             Sagittal_pred_ch4, Coronal_pred_ch4, Horizontal_pred_ch4 = split_image(pred_ch2)

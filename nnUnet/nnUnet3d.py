@@ -5,6 +5,7 @@ from BuildingBlocks import DoubleConv
 from utils.utils import get_number_of_learnable_parameters
 import copy
 
+
 class Abstract3DUNet(nn.Module):
 
     def __init__(self, in_channels, out_channels, f_maps, apply_pooling, deep_supervision, basic_module=DoubleConv):
@@ -54,7 +55,7 @@ class Abstract3DUNet(nn.Module):
 
     def forward(self, x):
         # encoder part
-        input_dim = (128,128,128)
+        input_dim = (128, 128, 128)
         encoders_features = []
         decoders_features = []
         for encoder in self.encoders:
@@ -70,10 +71,13 @@ class Abstract3DUNet(nn.Module):
         for i, (decoder, encoder_features) in enumerate(zip(self.decoders, encoders_features)):
             # pass the output from the corresponding encoder and the output of the previous decoder
             x = decoder(encoder_features, x)
+            _, _, D, W, H = x.shape
             # no activation layer for first layer
-            if i > (4-self.deep_supervision):
+            if i > (3 - self.deep_supervision):
                 output_activation = self.output_activation[i]
-                encoders_feat = nn.functional.interpolate(output_activation(x), size=input_dim, mode='trilinear')
+                encoders_feat = output_activation(x)
+                if (D, W, H) != input_dim:
+                    encoders_feat = nn.functional.interpolate(encoders_feat, size=input_dim, mode='trilinear')
                 decoders_features.append(encoders_feat)
 
         return decoders_features
@@ -90,12 +94,9 @@ if __name__ == '__main__':
     torch.cuda.empty_cache()
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     f_maps = [32, 64, 128, 256, 320, 320]
-    model = UNet3D(4, 4, f_maps, apply_pooling=False, basic_module=DoubleConv, deep_supervision=3)
+    model = UNet3D(4, 4, f_maps, apply_pooling=False, basic_module=DoubleConv, deep_supervision=4)
     model.to(device)
     x = model.training
-    print(1)
-    rand_image = torch.rand(1, 4, 128, 128, 128).to(device)
-
+    rand_image = torch.rand(2, 4, 128, 128, 128).to(device)
     # print(get_number_of_learnable_parameters(model))
-    (model(rand_image))
-
+    out = model(rand_image)
