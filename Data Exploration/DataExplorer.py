@@ -1,14 +1,17 @@
 import torch
 import matplotlib.pyplot as plt
 import torchvision
-from CustomTransformations import LoadData, ToTensor, CustomNormalize, RandomCrop3D, OneHotEncoding3d
+from DataLoader.CustomTransformations import ToTensor, CustomNormalize, RandomCrop3D, OneHotEncoding3d
 from utils.utils import split_image
+from DataLoader.CustomDataSet import CustomDataset, LoadData
+from torchvision import transforms, datasets
 
 
-def show_image(image, name):
+def show_image(image, name=None):
     """display 3d image with shape of (128,128,128)"""
     fig = plt.figure()
-    plt.title(name)
+    if name is not None:
+        plt.title(name)
     ax1 = fig.add_subplot(221)
     ax2 = fig.add_subplot(222)
     ax3 = fig.add_subplot(223)
@@ -42,19 +45,12 @@ def histogram_image(image):
 
 if __name__ == '__main__':
     # set all needed transformation
-    dir = r"/tcmldrive/databases/Public/MICA BRaTS2018/Training/HGG/Brats18_2013_2_1"
-    load_data = LoadData()
-    data, label, image_names = load_data(dir, with_names=True)
-    data_transforms = torchvision.transforms.Compose([ToTensor(), CustomNormalize()])
-    gt_transforms = torchvision.transforms.Compose([OneHotEncoding3d(label.shape), ToTensor()])
-
-    net_dim = (128, 128, 128)
-    rand_crop = RandomCrop3D(data.shape, net_dim)
-
-    data = data_transforms(data)
-    label = gt_transforms(label)
-
-    data, label = rand_crop(data, label)
+    # dir = r"/tcmldrive/databases/Public/MICA BRaTS2018/Training/HGG/Brats18_2013_2_1"
+    dir = r'C:\Users\User\Documents\FinalProject\MICCAI_BraTS2020\MICCAI_BraTS2020_TrainingData\MICCAI_BraTS2020_TrainingData'
+    transform_train = (
+        transforms.RandomAffine(scale=(0.95, 1.05), degrees=8, shear=0.15, translate=(0.1, 0.1)),)
+    dataset = CustomDataset(data_dir=dir, transforms=transform_train)
+    data, seg = dataset.__getitem__(17)
 
     mri1, mri2, mri3, mri4 = torch.chunk(data, dim=0, chunks=4)
     mri1 = torch.squeeze(mri1)
@@ -62,12 +58,13 @@ if __name__ == '__main__':
     mri3 = torch.squeeze(mri3)
     mri4 = torch.squeeze(mri4)
 
-    show_image(mri1, image_names[0])
-    show_image(mri2, image_names[1])
-    show_image(mri3, image_names[2])
-    show_image(mri4, image_names[3])
 
-    _, ch1, ch2, ch4 = torch.chunk(label, dim=0, chunks=4)
+    show_image(mri1)
+    show_image(mri2)
+    show_image(mri3)
+    show_image(mri4)
+
+    _, ch1, ch2, ch4 = torch.chunk(seg, dim=0, chunks=4)
     ch1 = torch.squeeze(ch1)
     ch2 = torch.squeeze(ch2)
     ch4 = torch.squeeze(ch4)

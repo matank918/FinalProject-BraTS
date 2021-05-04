@@ -11,6 +11,7 @@ from Loss.loss import create_loss
 from Loss.metrics import create_eval
 import utils.config as cfg
 from nnUnet.nnUnet3d import UNet3D
+from DataLoader.FastAutoAugment import FastAutoAugment
 import logging
 
 def _get_model():
@@ -21,8 +22,7 @@ def _get_model():
                   ,basic_module=basic_block, deep_supervision=cfg.deep_supervision)
 
 
-def _get_train_loaders():
-    dataset = CustomDataset(cfg.loader_path)
+def _get_train_loaders(dataset):
     n_val = int(len(dataset) * cfg.val_percent)
     n_train = len(dataset) - n_val
     train, val = random_split(dataset, [n_train, n_val])
@@ -62,7 +62,7 @@ def _create_optimizer(model):
 
 
 def _create_lr_scheduler(optimizer):
-    lr_lambda = lambda epoch: 0.99 ** epoch
+    lr_lambda = lambda epoch: 0.99 * epoch
     return optim.lr_scheduler.LambdaLR(optimizer, lr_lambda)
 
 
@@ -97,7 +97,8 @@ if __name__ == '__main__':
     eval_criterion = _get_eval_criterion()
 
     # Create data loaders
-    loaders = _get_train_loaders()
+    dataset = CustomDataset(cfg.loader_path)
+    loaders = _get_train_loaders(dataset)
 
     # Create the optimizer
     optimizer = _create_optimizer(model)
@@ -105,10 +106,13 @@ if __name__ == '__main__':
     # Create learning rate adjustment strategy
     lr_scheduler = _create_lr_scheduler(optimizer)
 
+    Auto = FastAutoAugment(model=model, loss_criterion=loss_criterion,optimizer=optimizer, scheduler=lr_scheduler, device=device,
+                           eval_criterion=eval_criterion, dataset=dataset)
+
     # Create model trainer
-    trainer = _create_trainer(model=model, optimizer=optimizer, device=device, logger=logger,
-                              loss_criterion=loss_criterion,
-                              eval_criterion=eval_criterion, loaders=loaders,
-                              lr_scheduler=lr_scheduler)
-    # Start training
-    trainer.fit()
+    # trainer = _create_trainer(model=model, optimizer=optimizer, device=device, logger=logger,
+    #                           loss_criterion=loss_criterion,
+    #                           eval_criterion=eval_criterion, loaders=loaders,
+    #                           lr_scheduler=lr_scheduler)
+    # # Start training
+    # trainer.fit()

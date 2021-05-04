@@ -1,5 +1,5 @@
 import torch.nn as nn
-from utils import config as cfg
+import utils.config as cfg
 
 
 class DoubleConv(nn.Module):

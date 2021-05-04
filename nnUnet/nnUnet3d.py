@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
-from UnetParts import Encoder, Decoder
-from BuildingBlocks import DoubleConv
+from nnUnet.UnetParts import Encoder, Decoder
+from nnUnet.BuildingBlocks import DoubleConv
 from utils.utils import get_number_of_learnable_parameters
 import copy
 
@@ -94,9 +94,9 @@ if __name__ == '__main__':
     torch.cuda.empty_cache()
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     f_maps = [32, 64, 128, 256, 320, 320]
-    model = UNet3D(4, 4, f_maps, apply_pooling=False, basic_module=DoubleConv, deep_supervision=4)
+    model = UNet3D(4, 4, f_maps, apply_pooling=False, basic_module=DoubleConv, deep_supervision=3)
     model.to(device)
-    x = model.training
-    rand_image = torch.rand(2, 4, 128, 128, 128).to(device)
+    # x = model.training
+    # rand_image = torch.rand(2, 4, 128, 128, 128).to(device)
     # print(get_number_of_learnable_parameters(model))
-    out = model(rand_image)
+    # out = model(rand_image)

@@ -1,8 +1,9 @@
 """ Parts of the U-Net model """
 import torch
 import torch.nn as nn
-from BuildingBlocks import DoubleConv
-from utils import config as cfg
+from nnUnet.BuildingBlocks import DoubleConv
+import utils.config as cfg
+
 
 class Encoder(nn.Module):
     """

@@ -7,14 +7,13 @@ Created on Wed May 27 17:19:37 2020
 
 # general
 log_path = r'/home/kachel/Project/runs/'
-# run_purpose = "deep supervision experiment #2 - no deep supervision, SGD, batch size=2, dice"
-id = 2
-run_name = "Dry run2 - base line with supervision"
-run_purpose = "compare base line to deep supervision"
+id = 3
+run_name = "Dry run3 -gradient accumulation verification"
+run_purpose = "compare gradient accumulation to batch size"
 
 # model
 model_name = 'UNet3D'
-module_name = 'BuildingBlocks'
+module_name = 'nnUnet.BuildingBlocks'
 basic_block = 'DoubleConv'
 in_channels = 4
 out_channels = 4
@@ -30,7 +29,7 @@ eval_name = 'DiceMetric'
 # loader
 loader_path = r'/home/kachel/MICA BraTS2020/'
 val_percent = 0.1
-batch_size = 2
+batch_size = 1
 
 # optimizer
 deep_supervision = 3
@@ -39,15 +38,15 @@ optimizer_name = 'SGD'
 learning_rate = 0.01
 momentum = 0.99
 nesterov = True
-accumulation_steps = 1
+accumulation_steps = 2
 
 # train
-log_after_iters = 75
-validate_after_iters = 75
+log_after_iters = 150
+validate_after_iters = 150
 validate_iters = 40
 
-max_num_epochs = 50
-max_num_iterations = 5000
+max_num_epochs = 100
+max_num_iterations = 10000
 
 best_eval_score = 0.65
 eval_score_higher_is_better = True

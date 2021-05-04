@@ -4,6 +4,25 @@ import ast
 import os
 import torch
 import shutil
+from sklearn.model_selection import StratifiedShuffleSplit
+
+
+def split_dataset(dataset, k):
+    # load dataset
+    X = list(range(len(dataset)))
+    Y = dataset.targets
+
+    # split to k-fold
+    assert len(X) == len(Y)
+
+    def _it_to_list(_it):
+        return list(zip(*list(_it)))
+
+    sss = StratifiedShuffleSplit(n_splits=k,  test_size=0.1)
+    Dm_indexes, Da_indexes = _it_to_list(sss.split(X, Y))
+
+    return Dm_indexes, Da_indexes
+
 
 def flatten(tensor):
     """Flattens a given tensor such that the channel axis is first.
@@ -19,13 +38,13 @@ def flatten(tensor):
     # Flatten: (C, N, D, H, W) -> (C, N * D * H * W)
     return transposed.contiguous().view(C, -1)
 
+
 def split_image(image):
     Sagittal = torch.unsqueeze(image[image.shape[0] // 2], 0)
     Coronal = torch.unsqueeze(image[:, image.shape[1] // 2], 0)
     Horizontal = torch.unsqueeze(image[:, :, image.shape[2] // 2], 0)
 
     return Sagittal, Coronal, Horizontal
-
 
 
 class RunningAverage:
@@ -41,8 +60,6 @@ class RunningAverage:
         self.count += n
         self.sum += value * n
         self.avg = self.sum / self.count
-
-
 
 
 def get_number_of_learnable_parameters(model):
@@ -76,7 +93,6 @@ def save_checkpoint(state, is_best, checkpoint_dir, logger=None):
         best_file_path = os.path.join(checkpoint_dir, 'best_checkpoint.pytorch')
         log_info(f"Saving best checkpoint to '{best_file_path}'")
         shutil.copyfile(last_file_path, best_file_path)
-
 
     # cwd = pathlib.Path.cwd()
     # last_dir = cwd.name
