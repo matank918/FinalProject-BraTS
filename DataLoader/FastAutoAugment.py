@@ -14,6 +14,8 @@ import torch
 from DataLoader.CustomTransformations import *
 from utils.utils import split_dataset
 from trainer import UNet3DTrainer
+from DataLoader.CustomDataSet import get_loaders
+from sklearn.model_selection import KFold
 
 DEFALUT_CANDIDATES = [
     ShearXY,
@@ -34,17 +36,16 @@ DEFALUT_CANDIDATES = [
 
 
 class FastAutoAugment:
-    def __init__(self, model, dataset, device, optimizer, scheduler, loss_criterion, eval_criterion):
+    def __init__(self, model, dataset, optimizer, scheduler, loss_criterion, eval_criterion):
         self.model = model
         self.dataset = dataset
-        self.device = device
         self.optimizer = optimizer
         self.scheduler = scheduler
         self.loss_criterion = loss_criterion
         self.eval_criterion = eval_criterion
         self.lr_scheduler = scheduler
 
-    def fast_auto_augment(self, K=5, B=100, T=2, N=10, num_process=5):
+    def fast_auto_augment(self, K=3, B=100, T=2, N=10, num_process=3):
         num_process = min(torch.cuda.device_count(), num_process)
         transform, futures = [], []
 
@@ -53,12 +54,13 @@ class FastAutoAugment:
         transform_candidates = DEFALUT_CANDIDATES
 
         # split data set
-        Dm_indexes, Da_indexes = split_dataset(self.dataset, K)
+        # Define the K-fold Cross Validator
+        kfold = KFold(n_splits=K, shuffle=True)
 
         with ProcessPoolExecutor(max_workers=num_process) as executor:
-            for k, (Dm_indx, Da_indx) in enumerate(zip(Dm_indexes, Da_indexes)):
+            for fold, (Dm_indx, Da_indx) in enumerate(kfold.split(self.dataset)):
                 future = executor.submit(self.process_fn
-                                         , Dm_indx, Da_indx, T, transform_candidates, B, N, k)
+                                         , Dm_indx, Da_indx, T, transform_candidates, B, N, fold)
                 futures.append(future)
 
             for future in futures:
@@ -69,6 +71,15 @@ class FastAutoAugment:
         return transform
 
     def process_fn(self, Dm_indx, Da_indx, T, transform_candidates, B, N, k):
+        torch.manual_seed(42)
+
+        # Sample elements randomly from a given list of ids, no replacement.
+        train_subsampler = torch.utils.data.SubsetRandomSampler(Dm_indx)
+        eval_subsampler = torch.utils.data.SubsetRandomSampler(Da_indx)
+
+        # # Define data loaders for training and testing data in this fold
+        # evalloader = torch.utils.data.DataLoader(self.dataset, batch_size=2, sampler=eval_subsampler)
+
         device_id = k % torch.cuda.device_count()
         device = torch.device('cuda:%d' % device_id)
         _transform = []
@@ -76,70 +87,52 @@ class FastAutoAugment:
         print('[+] Child %d training strated (GPU: %d)' % (k, device_id))
 
         # train child model
-        child_model = copy.deepcopy(self.model)
         logger = get_logger(cfg.log_path)
-        self.train_child(child_model, Dm_indx, device, logger)
+        trainer = self.train_child(train_subsampler, device, logger)
 
-        # # search sub policy
-        # for t in range(T):
-        #     subpolicies = self.search_subpolicies_hyperopt(transform_candidates, child_model, self.trainloader, Da_indx, B, device)
-        #     subpolicies = self.get_topn_subpolicies(subpolicies, N)
-        #     _transform.extend([subpolicy[0] for subpolicy in subpolicies])
-        #
-        # return _transform
+        # search sub policy
+        for t in range(T):
+            subpolicies = self.search_subpolicies(transform_candidates, eval_subsampler, B, trainer)
+            subpolicies = self.get_topn_subpolicies(subpolicies, N)
+            _transform.extend([subpolicy[0] for subpolicy in subpolicies])
 
-    def train_child(self, model, subset_indx, logger, device=None):
+        return _transform
 
-        subset = Subset(self.dataset, subset_indx)
-        loaders = get_loaders(subset)
+    def train_child(self, train_subsampler, logger, device):
 
-        if device:
-            model = model.to(device)
+        self.model.to(device)
 
-            if torch.cuda.device_count() > 1:
-                print('\n[+] Use {} GPUs'.format(torch.cuda.device_count()))
-                self.model = nn.DataParallel(self.model)
+        if torch.cuda.device_count() > 1:
+            print('\n[+] Use {} GPUs'.format(torch.cuda.device_count()))
+            self.model = nn.DataParallel(self.model)
 
-        trainer = UNet3DTrainer(model=model, logger=logger, optimizer=optimizer, loss_criterion=self.loss_criterion,
-                      lr_scheduler=self.lr_scheduler,
-                      eval_criterion=self.eval_criterion, device=device, loaders=loaders,
-                      num_iterations=cfg.num_iterations,
-                      validate_iters=cfg.validate_iters, checkpoint_dir=cfg.checkpoint_dir,
-                      best_eval_score=cfg.best_eval_score,
-                      validate_after_iters=cfg.validate_after_iters,
-                      log_after_iters=cfg.log_after_iters,
-                      num_epoch=cfg.num_epoch, max_num_iterations=cfg.max_num_iterations,
-                      eval_score_higher_is_better=cfg.eval_score_higher_is_better,
-                      max_num_epochs=cfg.max_num_epochs,
-                      accumulation_steps=cfg.accumulation_steps)
+        trainloader = torch.utils.data.DataLoader(self.dataset, batch_size=2, sampler=train_subsampler)
 
-        trainer.fit()
+        trainer = UNet3DTrainer(model=self.model, logger=logger, optimizer=self.optimizer,
+                                loss_criterion=self.loss_criterion,
+                              lr_scheduler=self.lr_scheduler,
+                              eval_criterion=self.eval_criterion, device=device,
+                              checkpoint_dir=cfg.checkpoint_dir,
+                              best_eval_score=cfg.best_eval_score,
+                              validate_after_iters=cfg.validate_after_iters,
+                              log_after_iters=cfg.log_after_iters,
+                              max_num_iterations=cfg.max_num_iterations,
+                              max_num_epochs=cfg.max_num_epochs,
+                              accumulation_steps=cfg.accumulation_steps)
 
-    def validate_child(self, model, dataset, subset_indx, transform, device=None):
-        criterion = nn.CrossEntropyLoss()
+        trainer.fit(trainloader, None)
 
-        if device:
-            model = model.to(device)
+        return trainer
 
-        self.trainloader.transform = transform
-        subset = Subset(dataset, subset_indx)
-        # data_loader = get_dataloader(args, subset, pin_memory=False)
-        #
-        # return validate(args, model, criterion, data_loader, 0, None, device)
-
-    def search_subpolicies_hyperopt(self, transform_candidates, child_model, Da_indx, B):
+    def search_subpolicies(self, transform_candidates, eval_subsampler, B, trainer):
         def _objective(sampled):
-            subpolicy = [transform(prob, mag)
-                         for transform, prob, mag in sampled]
+            trainloader = torch.utils.data.DataLoader(self.dataset, batch_size=2, sampler=eval_subsampler)
+            subpolicy = [transform(prob, mag) for transform, prob, mag in sampled]
 
-            subpolicy = transforms.Compose([
-                transforms.Resize(32),
-                *subpolicy,
-                transforms.ToTensor()])
 
-            val_res = self.validate_child(child_model, Da_indx, subpolicy, self.device)
-            loss = val_res[2].cpu().numpy()
-            return {'loss': loss, 'status': STATUS_OK}
+            val_res = trainer.validate(trainloader)
+
+            return {'val_res': val_res, 'status': STATUS_OK}
 
         space = [
             (hp.choice('transform1', transform_candidates), hp.uniform('prob1', 0, 1.0), hp.uniform('mag1', 0, 1.0)),
@@ -171,15 +164,14 @@ class FastAutoAugment:
     def get_topn_subpolicies(self, subpolicies, N):
         return sorted(subpolicies, key=lambda subpolicy: subpolicy[1])[:N]
 
+    def reset_weights(self, m):
+        '''
+          Try resetting model weights to avoid
+          weight leakage.
+        '''
+        for layer in m.children():
+            if hasattr(layer, 'reset_parameters'):
+                print(f'Reset trainable parameters of layer = {layer}')
+                layer.reset_parameters()
 
-if __name__ == '__main__':
-    model = CifarCNN()
-    logger = get_logger(cfg.log_path)
-    trainloader, _, _ = get_data(cfg.svhn_path, cfg.batch_size, 0, 0)
-    optimizer = torch.optim.Adam(model.parameters(), lr=cfg.learning_rate)
-    criterion = nn.CrossEntropyLoss()
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-    Fast = FastAutoAugment(model=model, trainloader=trainloader, optimizer=optimizer,
-                           criterion=criterion, scheduler=None, device=device)
-    Fast.fast_auto_augment()

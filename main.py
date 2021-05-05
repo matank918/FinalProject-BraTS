@@ -9,27 +9,9 @@ from DataLoader.CustomDataSet import CustomDataset, get_loaders
 from Loss.loss import create_loss
 from Loss.metrics import create_eval
 import utils.config as cfg
-from nnUnet.nnUnet3d import UNet3D
+from nnUnet.nnUnet3d import get_model
 from DataLoader.FastAutoAugment import FastAutoAugment
 import logging
-
-
-def _get_model(in_channels, out_channels, f_maps, apply_pooling, deep_supervision, module_name, basic_block):
-    module = importlib.import_module(module_name)
-    basic_block = getattr(module, basic_block)
-    return UNet3D(in_channels=in_channels, out_channels=out_channels, f_maps=f_maps,
-                  apply_pooling=apply_pooling
-                  , basic_module=basic_block, deep_supervision=deep_supervision)
-
-
-
-
-def _get_loss_criterion():
-    return create_loss(cfg.loss_name)
-
-
-def _get_eval_criterion():
-    return create_eval(cfg.eval_name)
 
 
 def _create_optimizer(model):
@@ -37,11 +19,6 @@ def _create_optimizer(model):
         return optim.SGD(model.parameters(), lr=cfg.learning_rate, momentum=cfg.momentum, nesterov=cfg.nesterov)
     elif cfg.optimizer_name == 'Adam':
         return optim.Adam(model.parameters(), lr=cfg.learning_rate)
-
-
-def _create_lr_scheduler(optimizer):
-    lr_lambda = lambda epoch: 0.99 * epoch
-    return optim.lr_scheduler.LambdaLR(optimizer, lr_lambda)
 
 
 if __name__ == '__main__':
@@ -53,7 +30,7 @@ if __name__ == '__main__':
     logger.info(get_module_variable(cfg))
 
     # Create the model
-    model = _get_model(in_channels=cfg.in_channels, out_channels=cfg.out_channels, f_maps=cfg.f_maps,
+    model = get_model(in_channels=cfg.in_channels, out_channels=cfg.out_channels, f_maps=cfg.f_maps,
                        apply_pooling=cfg.apply_pooling, deep_supervision=cfg.deep_supervision, module_name=cfg.module_name,
                        basic_block= cfg.basic_block)
 
@@ -71,10 +48,10 @@ if __name__ == '__main__':
     logger.info(f'Number of learnable params {get_number_of_learnable_parameters(model)}')
 
     # Create loss criterion
-    loss_criterion = _get_loss_criterion()
+    loss_criterion = create_loss(cfg.loss_name)
 
     # Create evaluation metric
-    eval_criterion = _get_eval_criterion()
+    eval_criterion = create_eval(cfg.eval_name)
 
     # Create data loaders
     dataset = CustomDataset(cfg.loader_path)
@@ -84,7 +61,8 @@ if __name__ == '__main__':
     optimizer = _create_optimizer(model)
 
     # Create learning rate adjustment strategy
-    lr_scheduler = _create_lr_scheduler(optimizer)
+    lr_lambda = lambda epoch: 0.99 * epoch
+    lr_scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda)
 
     # Create model trainer
     trainer = UNet3DTrainer(model=model, logger=logger, optimizer=optimizer, loss_criterion=loss_criterion,

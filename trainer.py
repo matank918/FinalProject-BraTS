@@ -116,7 +116,7 @@ class UNet3DTrainer:
                     # self._log_images(input, global_step, target, output, 'train_')
 
                 iter_time = time.clock() - iter_time
-                self.logger.info(f"duration for iter {i} is {iter_time} seconds")
+                self.logger.info(f"duration for iter {i} is {int(iter_time)} seconds")
 
             # adjust learning rate if necessary
             if self.scheduler is not None:

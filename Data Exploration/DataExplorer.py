@@ -46,7 +46,10 @@ def histogram_image(image):
 if __name__ == '__main__':
     # set all needed transformation
     # dir = r"/tcmldrive/databases/Public/MICA BRaTS2018/Training/HGG/Brats18_2013_2_1"
-    dir = r'C:\Users\User\Documents\FinalProject\MICCAI_BraTS2020\MICCAI_BraTS2020_TrainingData\MICCAI_BraTS2020_TrainingData'
+    # load = LoadData()
+    # data, seg = load(file_dir=dir)
+
+    dir = r'C:\Users\User\Documents\FinalProject\MICCAI_BraTS2020\MICCAI_BraTS2020_TrainingData'
     transform_train = (
         transforms.RandomAffine(scale=(0.95, 1.05), degrees=8, shear=0.15, translate=(0.1, 0.1)),)
     dataset = CustomDataset(data_dir=dir, transforms=transform_train)
@@ -57,7 +60,6 @@ if __name__ == '__main__':
     mri2 = torch.squeeze(mri2)
     mri3 = torch.squeeze(mri3)
     mri4 = torch.squeeze(mri4)
-
 
     show_image(mri1)
     show_image(mri2)
@@ -72,11 +74,5 @@ if __name__ == '__main__':
     show_image(ch1, "ch1")
     show_image(ch2, "ch2")
     show_image(ch4, "ch4")
-
-    Sagittal_ch1, Coronal_ch1, Horizontal_ch1 = split_image(ch1)
-
-    Sagittal_ch1 = torch.squeeze(Sagittal_ch1)
-    Coronal_ch1 = torch.squeeze(Coronal_ch1)
-    Horizontal_ch1 = torch.squeeze(Horizontal_ch1)
 
     histogram_image(mri1)

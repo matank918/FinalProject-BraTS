@@ -41,18 +41,12 @@ nesterov = True
 accumulation_steps = 2
 
 # train
-log_after_iters = 150
-validate_after_iters = 150
-validate_iters = 40
-
-max_num_epochs = 100
-max_num_iterations = 10000
+log_after_iters = 50
+validate_after_iters = 50 # < len(traindata)
+max_num_epochs = 10
 
 best_eval_score = 0.65
-eval_score_higher_is_better = True
 checkpoint_dir = r'./runs'
-num_epoch = 1
-num_iterations = 1
 
 # architecture
 kernel_size = (3, 3, 3)

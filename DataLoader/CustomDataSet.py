@@ -17,7 +17,7 @@ def get_loaders(dataset, val_percent, batch_size):
 
 
 class CustomDataset(Dataset):
-    def __init__(self, data_dir, transforms=(), target_transform=()):
+    def __init__(self, data_dir, transforms=()):
         """:param images_dir: (str)"""
 
         self.dir = data_dir
@@ -32,7 +32,6 @@ class CustomDataset(Dataset):
             CustomNormalize()])
 
         self.target_transform = torchvision.transforms.Compose([
-            *target_transform,
             OneHotEncoding3d((240, 240, 155)),
             ToTensor()])
 
@@ -48,15 +47,15 @@ class CustomDataset(Dataset):
         return len(self.folder_names)
 
     def __getitem__(self, i):
-        data, label = self.load_data(self.folder_names[i])
+        data, seg = self.load_data(self.folder_names[i])
 
         data = self.transforms(data)
-        label = self.target_transform(label)
+        seg = self.target_transform(seg)
 
         self.rand_crop = RandomCrop3D(data.shape, crop_dim=(128, 128, 128))
 
-        data, label = self.rand_crop(data, label)
-        return data, label
+        data, seg = self.rand_crop(data, seg)
+        return data, seg
 
 
 class LoadData(object):

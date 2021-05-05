@@ -4,7 +4,7 @@ from nnUnet.UnetParts import Encoder, Decoder
 from nnUnet.BuildingBlocks import DoubleConv
 from utils.utils import get_number_of_learnable_parameters
 import copy
-
+import importlib
 
 class Abstract3DUNet(nn.Module):
 
@@ -88,6 +88,14 @@ class UNet3D(Abstract3DUNet):
         super(UNet3D, self).__init__(in_channels=in_channels, out_channels=out_channels,
                                      f_maps=f_maps, apply_pooling=apply_pooling, basic_module=basic_module,
                                      deep_supervision=deep_supervision)
+
+
+def get_model(in_channels, out_channels, f_maps, apply_pooling, deep_supervision, module_name, basic_block):
+    module = importlib.import_module(module_name)
+    basic_block = getattr(module, basic_block)
+    return UNet3D(in_channels=in_channels, out_channels=out_channels, f_maps=f_maps,
+                  apply_pooling=apply_pooling
+                  ,basic_module=basic_block, deep_supervision=deep_supervision)
 
 
 if __name__ == '__main__':
