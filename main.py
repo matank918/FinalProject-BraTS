@@ -2,11 +2,10 @@ import importlib
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import DataLoader, random_split
 from utils.utils import get_number_of_learnable_parameters
 from utils.Log import get_logger, get_module_variable
 from trainer import UNet3DTrainer
-from DataLoader.CustomDataSet import CustomDataset
+from DataLoader.CustomDataSet import CustomDataset, get_loaders
 from Loss.loss import create_loss
 from Loss.metrics import create_eval
 import utils.config as cfg
@@ -14,22 +13,15 @@ from nnUnet.nnUnet3d import UNet3D
 from DataLoader.FastAutoAugment import FastAutoAugment
 import logging
 
-def _get_model():
-    module = importlib.import_module(cfg.module_name)
-    basic_block = getattr(module, cfg.basic_block)
-    return UNet3D(in_channels=cfg.in_channels, out_channels=cfg.out_channels, f_maps=cfg.f_maps,
-                  apply_pooling=cfg.apply_pooling
-                  ,basic_module=basic_block, deep_supervision=cfg.deep_supervision)
+
+def _get_model(in_channels, out_channels, f_maps, apply_pooling, deep_supervision, module_name, basic_block):
+    module = importlib.import_module(module_name)
+    basic_block = getattr(module, basic_block)
+    return UNet3D(in_channels=in_channels, out_channels=out_channels, f_maps=f_maps,
+                  apply_pooling=apply_pooling
+                  , basic_module=basic_block, deep_supervision=deep_supervision)
 
 
-def _get_train_loaders(dataset):
-    n_val = int(len(dataset) * cfg.val_percent)
-    n_train = len(dataset) - n_val
-    train, val = random_split(dataset, [n_train, n_val])
-    train_loader = DataLoader(train, batch_size=cfg.batch_size, shuffle=True, num_workers=8, pin_memory=True)
-    val_loader = DataLoader(val, batch_size=cfg.batch_size, shuffle=False, num_workers=8, pin_memory=True, drop_last=True)
-    loader_dict = {'train': train_loader, 'val': val_loader}
-    return loader_dict
 
 
 def _get_loss_criterion():
@@ -38,20 +30,6 @@ def _get_loss_criterion():
 
 def _get_eval_criterion():
     return create_eval(cfg.eval_name)
-
-
-def _create_trainer(model, device, optimizer, lr_scheduler, loss_criterion, eval_criterion, loaders, logger):
-    return UNet3DTrainer(model=model, logger=logger, optimizer=optimizer, loss_criterion=loss_criterion,
-                         lr_scheduler=lr_scheduler,
-                         eval_criterion=eval_criterion, device=device, loaders=loaders,
-                         num_iterations=cfg.num_iterations,
-                         validate_iters=cfg.validate_iters, checkpoint_dir=cfg.checkpoint_dir,
-                         best_eval_score=cfg.best_eval_score,
-                         validate_after_iters=cfg.validate_after_iters,
-                         log_after_iters=cfg.log_after_iters,
-                         num_epoch=cfg.num_epoch, max_num_iterations=cfg.max_num_iterations,
-                         eval_score_higher_is_better=cfg.eval_score_higher_is_better, max_num_epochs=cfg.max_num_epochs,
-                         accumulation_steps=cfg.accumulation_steps)
 
 
 def _create_optimizer(model):
@@ -75,7 +53,9 @@ if __name__ == '__main__':
     logger.info(get_module_variable(cfg))
 
     # Create the model
-    model = _get_model()
+    model = _get_model(in_channels=cfg.in_channels, out_channels=cfg.out_channels, f_maps=cfg.f_maps,
+                       apply_pooling=cfg.apply_pooling, deep_supervision=cfg.deep_supervision, module_name=cfg.module_name,
+                       basic_block= cfg.basic_block)
 
     # use DataParallel if more than 1 GPU available
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -98,7 +78,7 @@ if __name__ == '__main__':
 
     # Create data loaders
     dataset = CustomDataset(cfg.loader_path)
-    loaders = _get_train_loaders(dataset)
+    train_loader, eval_loader = get_loaders(dataset, cfg.val_percent, cfg.batch_size)
 
     # Create the optimizer
     optimizer = _create_optimizer(model)
@@ -106,13 +86,20 @@ if __name__ == '__main__':
     # Create learning rate adjustment strategy
     lr_scheduler = _create_lr_scheduler(optimizer)
 
-    Auto = FastAutoAugment(model=model, loss_criterion=loss_criterion,optimizer=optimizer, scheduler=lr_scheduler, device=device,
-                           eval_criterion=eval_criterion, dataset=dataset)
-
     # Create model trainer
-    # trainer = _create_trainer(model=model, optimizer=optimizer, device=device, logger=logger,
-    #                           loss_criterion=loss_criterion,
-    #                           eval_criterion=eval_criterion, loaders=loaders,
-    #                           lr_scheduler=lr_scheduler)
-    # # Start training
-    # trainer.fit()
+    trainer = UNet3DTrainer(model=model, logger=logger, optimizer=optimizer, loss_criterion=loss_criterion,
+                            lr_scheduler=lr_scheduler, device=device,
+                            eval_criterion=eval_criterion,
+                            checkpoint_dir=cfg.checkpoint_dir,
+                            best_eval_score=cfg.best_eval_score,
+                            validate_after_iters=cfg.validate_after_iters,
+                            log_after_iters=cfg.log_after_iters,
+                            max_num_iterations=cfg.max_num_iterations,
+                            max_num_epochs=cfg.max_num_epochs,
+                            accumulation_steps=cfg.accumulation_steps)
+    # Start training
+    trainer.fit(train_loader, eval_loader)
+
+    # Auto = FastAutoAugment(model=model, loss_criterion=loss_criterion,optimizer=optimizer,
+    #                        scheduler=lr_scheduler, device=device,
+    #                        eval_criterion=eval_criterion, dataset=dataset)

@@ -6,7 +6,7 @@ Created on Wed May 27 17:19:37 2020
 """
 
 # general
-log_path = r'/home/kachel/Project/runs/'
+log_path = r'./runs'
 id = 3
 run_name = "Dry run3 -gradient accumulation verification"
 run_purpose = "compare gradient accumulation to batch size"
@@ -27,7 +27,7 @@ loss_name = 'DiceLoss'
 eval_name = 'DiceMetric'
 
 # loader
-loader_path = r'/home/kachel/MICA BraTS2020/'
+loader_path = r'C:\Users\User\Documents\FinalProject\MICCAI_BraTS2020\MICCAI_BraTS2020_TrainingData'
 val_percent = 0.1
 batch_size = 1
 
@@ -50,7 +50,7 @@ max_num_iterations = 10000
 
 best_eval_score = 0.65
 eval_score_higher_is_better = True
-checkpoint_dir = r'/home/kachel/Project/checkpoint/'
+checkpoint_dir = r'./runs'
 num_epoch = 1
 num_iterations = 1
 

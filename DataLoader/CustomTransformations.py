@@ -67,7 +67,7 @@ class RandomCrop3D(object):
         return x[:, slice_h[0]:slice_h[1], slice_w[0]:slice_w[1], slice_d[0]:slice_d[1]]
 
 
-class CustomNormalize(BaseTransform):
+class CustomNormalize(object):
 
     def __call__(self, x):
         for i in range(x.shape[0]):

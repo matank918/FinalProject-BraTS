@@ -1,8 +1,9 @@
 import torch
 import torch.nn as nn
 from torch.utils.tensorboard import SummaryWriter
-from utils.utils import RunningAverage, save_checkpoint, split_image
-from torch.optim.lr_scheduler import ReduceLROnPlateau
+from utils.utils import RunningAverage, split_image
+import os
+import time
 
 
 class UNet3DTrainer:
@@ -18,29 +19,20 @@ class UNet3DTrainer:
         eval_criterion (callable): used to compute training/validation metric (such as Dice, IoU, AP or Rand score)
             saving the best checkpoint is based on the result of this function on the validation set
         device (torch.device): device to train on
-        loaders (dict): 'train' and 'val' loaders
         checkpoint_dir (string): dir for saving checkpoints and tensorboard logs
         max_num_epochs (int): maximum number of epochs
         max_num_iterations (int): maximum number of iterations
         validate_after_iters (int): validate after that many iterations
         log_after_iters (int): number of iterations before logging to tensorboard
-        validate_iters (int): number of validation iterations, if None validate
-            on the whole validation set
-        eval_score_higher_is_better (bool): if True higher eval scores are considered better
-        best_eval_score (float): best validation score so far (higher better)
-        num_iterations (int): useful when loading the model from the checkpoint
-        num_epoch (int): useful when loading the model from the checkpoint
     """
 
     def __init__(self, model, logger, optimizer, loss_criterion, lr_scheduler,
-                 eval_criterion, device, loaders, num_iterations
-                 , validate_iters, checkpoint_dir, best_eval_score,
-                 validate_after_iters, log_after_iters, num_epoch, max_num_iterations, eval_score_higher_is_better,
+                 eval_criterion, device, checkpoint_dir, best_eval_score,
+                 validate_after_iters, log_after_iters, max_num_iterations,
                  max_num_epochs, accumulation_steps):
 
         self.logger = logger
         self.writer = SummaryWriter()
-
         self.model = model
         self.optimizer = optimizer
         self.scheduler = lr_scheduler
@@ -48,120 +40,94 @@ class UNet3DTrainer:
         self.loss_criterion = loss_criterion
         self.eval_criterion = eval_criterion
         self.device = device
-        self.loaders = loaders
         self.checkpoint_dir = checkpoint_dir
         self.max_num_epochs = max_num_epochs
         self.max_num_iterations = max_num_iterations
         self.validate_after_iters = validate_after_iters
         self.log_after_iters = log_after_iters
-        self.validate_iters = validate_iters
-        self.eval_score_higher_is_better = eval_score_higher_is_better
-
-        self.num_iterations = num_iterations
-        self.num_epoch = num_epoch
 
         self.logger.info(model)
-        logger.info(f'eval_score_higher_is_better: {eval_score_higher_is_better}')
 
         if best_eval_score is not None:
             self.best_eval_score = best_eval_score
         else:
             # initialize the best_eval_score
-            if eval_score_higher_is_better:
-                self.best_eval_score = float('-inf')
-            else:
-                self.best_eval_score = float('+inf')
+            self.best_eval_score = float('-inf')
 
-    def fit(self):
+    def fit(self, trainloaders, evalloader):
+        for num_epoch in range(1, self.max_num_epochs + 1):
+            train_losses = RunningAverage()
+            train_eval_scores = RunningAverage()
 
-        for _ in range(self.num_epoch, self.max_num_epochs):
-            # train for one epoch
-            should_terminate = self.train()
+            # sets the model in training mode
+            self.model.train()
+            for i, batch in enumerate(trainloaders, start=1):
 
-            if should_terminate:
-                self.logger.info('Stopping criterion is satisfied. Finishing training')
-                return
+                iter_time = time.clock()
 
-            self.num_epoch += 1
+                input, target = self._split_batch(batch)
 
-        self.logger.info(f"Reached maximum number of epochs: {self.max_num_epochs}. Finishing training...")
+                print(f'Training iteration [{i}/{self.max_num_iterations}]. '
+                      f'Epoch [{num_epoch}/{self.max_num_epochs}]')
 
-    def train(self):
-        """Trains the model for 1 epoch.
-        Returns:
-            True if the training should be terminated immediately, False otherwise
-        """
-        train_losses = RunningAverage()
-        train_eval_scores = RunningAverage()
+                # get output from the net, calculate the loss
+                output, loss = self._forward_pass(input, target)
+                train_losses.update(loss.item(), self._batch_size(input))
 
-        # sets the model in training mode
-        self.model.train()
-        for batch in self.loaders['train']:
+                # compute eval criterion for training set
+                eval_score = self.eval_criterion(output, target)
+                train_eval_scores.update(eval_score.item(), self._batch_size(input))
 
-            print(f'Training iteration [{self.num_iterations}/{self.max_num_iterations}]. '
-                  f'Epoch [{self.num_epoch}/{self.max_num_epochs}]')
+                loss = loss / self.accumulation_steps
+                loss.backward()
 
-            # splits between input and target
-            input, target = self._split_training_batch(batch)
+                # compute gradients and update parameters
+                if i % self.accumulation_steps == 0:
+                    self.optimizer.step()
+                    self.optimizer.zero_grad()
 
-            # get output from the net, calculate the loss
-            output, loss = self._forward_pass(input, target)
-            train_losses.update(loss.item(), self._batch_size(input))
+                if i % self.validate_after_iters == 0:
+                    global_step = num_epoch * len(trainloaders) + i
 
-            # compute eval criterion for training set
-            eval_score = self.eval_criterion(output, target)
-            train_eval_scores.update(eval_score.item(), self._batch_size(input))
+                    # evaluate during training
+                    if evalloader is not None:
+                        self.model.eval()
+                        # evaluate on validation set
+                        val_losses, eval_score = self.validate(evalloader)
+                        self._log_stats(global_step, 'val', val_losses, eval_score)
 
-            loss = loss / self.accumulation_steps
-            loss.backward()
-            # self.optimizer.step()
+                        # set the model back to training mode
+                        self.model.train()
 
-            # compute gradients and update parameters
-            if self.num_iterations % self.accumulation_steps == 0:
-                self.optimizer.step()
-                self.optimizer.zero_grad()
+                        # remember best validation metric
+                        is_best = self._is_best_eval_score(eval_score)
+                        if is_best:
+                            self._save_checkpoint(i, num_epoch)
 
-            if self.num_iterations % self.validate_after_iters == 0:
-                # set the model in eval mode
-                self.model.eval()
-                # evaluate on validation set
-                eval_score = self.validate()
-                # set the model back to training mode
-                self.model.train()
+                if i % self.log_after_iters == 0:
+                    global_step = num_epoch * len(trainloaders) + i
 
-                # adjust learning rate if necessary
-                if self.scheduler is not None:
-                    if isinstance(self.scheduler, ReduceLROnPlateau):
-                        self.scheduler.step(eval_score)
-                    else:
-                        self.scheduler.step()
+                    # log stats, params and images
+                    self.logger.info(
+                        f'Training stats. Loss: {train_losses.avg}. Evaluation score: {train_eval_scores.avg}')
 
+                    self._log_stats(global_step, 'train', train_losses.avg, train_eval_scores.avg)
+                    self._log_params(global_step)
+                    # self._log_images(input, global_step, target, output, 'train_')
+
+                iter_time = time.clock() - iter_time
+                self.logger.info(f"duration for iter {i} is {iter_time} seconds")
+
+            # adjust learning rate if necessary
+            if self.scheduler is not None:
+                global_step = num_epoch * len(trainloaders)
+                self.scheduler.step()
                 # log current learning rate in tensorboard
-                self._log_lr()
+                self._log_lr(global_step)
 
-                # remember best validation metric
-                is_best = self._is_best_eval_score(eval_score)
+            self.logger.info(f"Reached maximum number of epochs: {self.max_num_epochs}. Finishing training...")
 
-                # save checkpoint
-                self._save_checkpoint(is_best)
-
-            if self.num_iterations % self.log_after_iters == 0:
-                # log stats, params and images
-                self.logger.info(
-                    f'Training stats. Loss: {train_losses.avg}. Evaluation score: {train_eval_scores.avg}')
-
-                self._log_stats('train', train_losses.avg, train_eval_scores.avg)
-                self._log_params()
-                # self._log_images(input, target, output, 'train_')
-
-            if self.should_stop():
-                return True
-
-            self.num_iterations += 1
-
-        return False
-
-    def validate(self):
+    def validate(self, evalloader):
 
         print('Validating...')
 
@@ -169,37 +135,26 @@ class UNet3DTrainer:
         val_scores = RunningAverage()
 
         with torch.no_grad():
-            for i, batch in enumerate(self.loaders['val']):
-
-                input, target = self._split_training_batch(batch)
+            for i, batch in enumerate(evalloader):
+                input, target = self._split_batch(batch)
 
                 output, loss = self._forward_pass(input, target)
                 val_losses.update(loss.item(), self._batch_size(input))
 
-                if i % 100 == 0:
-                    pass
-                    # self._log_images(input, target, output, 'val_')
-
                 eval_score = self.eval_criterion(output, target)
                 val_scores.update(eval_score.item(), self._batch_size(input))
 
-                if i >= self.validate_iters:
-                    # stop validation
-                    break
-
-            self._log_stats('val', val_losses.avg, val_scores.avg)
             self.logger.info(f'Validation finished. Loss: {val_losses.avg}. Evaluation score: {val_scores.avg}')
-            return val_scores.avg
+            return val_losses.avg, val_scores.avg
 
-    def _split_training_batch(self, batch):
+    def _split_batch(self, batch):
+        # splits between input and target
         input, target = batch
         input = input.to(self.device)
         target = target.to(self.device)
-
         return input, target
 
     def _forward_pass(self, input, target):
-        # forward pass
         output = self.model(input)
         fin_output = output[-1]
         # compute the loss
@@ -212,29 +167,8 @@ class UNet3DTrainer:
 
         return output, loss
 
-    def should_stop(self):
-        """
-        Training will terminate if maximum number of iterations is exceeded or the learning rate drops below
-        some predefined threshold (1e-6 in our case)
-        """
-
-        if self.max_num_iterations < self.num_iterations:
-            self.logger.info(f'Maximum number of iterations {self.max_num_iterations} exceeded.')
-            return True
-
-        min_lr = 1e-6
-        lr = self.optimizer.param_groups[0]['lr']
-        if lr < min_lr:
-            self.logger.info(f'Learning rate below the minimum {min_lr}.')
-            return True
-
-        return False
-
     def _is_best_eval_score(self, eval_score):
-        if self.eval_score_higher_is_better:
-            is_best = eval_score > self.best_eval_score
-        else:
-            is_best = eval_score < self.best_eval_score
+        is_best = eval_score > self.best_eval_score
 
         if is_best:
             self.logger.info(f'Saving new best evaluation metric: {eval_score}')
@@ -242,52 +176,55 @@ class UNet3DTrainer:
 
         return is_best
 
-    def _save_checkpoint(self, is_best):
-        # remove `module` prefix from layer names when using `nn.DataParallel`
-        # see: https://discuss.pytorch.org/t/solved-keyerror-unexpected-key-module-encoder-embedding-weight-in-state-dict/1686/20
+    def _save_checkpoint(self, num_iterations, num_epoch):
         if isinstance(self.model, nn.DataParallel):
             state_dict = self.model.module.state_dict()
         else:
             state_dict = self.model.state_dict()
 
-        save_checkpoint({
-            'epoch': self.num_epoch + 1,
-            'num_iterations': self.num_iterations,
-            'model_state_dict': state_dict,
-            'best_eval_score': self.best_eval_score,
-            'eval_score_higher_is_better': self.eval_score_higher_is_better,
-            'optimizer_state_dict': self.optimizer.state_dict(),
-            'device': str(self.device),
-            'max_num_epochs': self.max_num_epochs,
-            'max_num_iterations': self.max_num_iterations,
-            'validate_after_iters': self.validate_after_iters,
-            'log_after_iters': self.log_after_iters,
-            'validate_iters': self.validate_iters,
-        }, is_best, checkpoint_dir=self.checkpoint_dir,
-            logger=self.logger)
+        state = {'epoch': num_epoch + 1,
+                 'num_iterations': num_iterations,
+                 'model_state_dict': state_dict,
+                 'best_eval_score': self.best_eval_score,
+                 'optimizer_state_dict': self.optimizer.state_dict(),
+                 'device': str(self.device),
+                 'max_num_epochs': self.max_num_epochs,
+                 'max_num_iterations': self.max_num_iterations,
+                 'validate_after_iters': self.validate_after_iters,
+                 'log_after_iters': self.log_after_iters,
+                 }
 
-    def _log_lr(self):
+        if not os.path.exists(self.checkpoint_dir):
+            self.logger.info(
+                f"Checkpoint directory does not exists. Creating {self.checkpoint_dir}")
+            os.mkdir(self.checkpoint_dir)
+
+        last_file_path = os.path.join(self.checkpoint_dir, 'last_checkpoint.pytorch')
+        self.logger(f"Saving last checkpoint to '{last_file_path}'")
+        torch.save(state, last_file_path)
+
+    def _log_lr(self, global_step):
         lr = self.optimizer.param_groups[0]['lr']
-        self.writer.add_scalar('learning_rate', lr, self.num_iterations)
+        self.writer.add_scalar('learning_rate', lr, global_step)
 
-    def _log_stats(self, phase, loss_avg, eval_score_avg):
+    def _log_stats(self, global_step, phase, loss_avg, eval_score_avg):
         tag_value = {
             f'{phase}_loss_avg': loss_avg,
             f'{phase}_eval_score_avg': eval_score_avg
         }
 
         for tag, value in tag_value.items():
-            self.writer.add_scalar(tag, value, self.num_iterations)
+            self.writer.add_scalar(tag, value, global_step)
 
-    def _log_params(self):
+    def _log_params(self, global_step):
         for name, value in self.model.named_parameters():
             try:
-                self.writer.add_histogram(name, value.data.cpu().numpy(), self.num_iterations)
-                self.writer.add_histogram(name + '/grad', value.grad.data.cpu().numpy(), self.num_iterations)
+                self.writer.add_histogram(name, value.data.cpu().numpy(), global_step)
+                self.writer.add_histogram(name + '/grad', value.grad.data.cpu().numpy(), global_step)
             except AttributeError as e:
                 pass
 
-    def _log_images(self, input, target, prediction, prefix):
+    def _log_images(self, global_step, input, target, prediction, prefix):
         if self._batch_size(input) == 1:
             _, ch1, ch2, ch4 = torch.chunk(target, dim=1, chunks=4)
             Sagittal_ch1, Coronal_ch1, Horizontal_ch1 = split_image(ch1)
@@ -299,30 +236,36 @@ class UNet3DTrainer:
             Sagittal_pred_ch2, Coronal_pred_ch2, Horizontal_pred_ch2 = split_image(pred_ch2)
             Sagittal_pred_ch4, Coronal_pred_ch4, Horizontal_pred_ch4 = split_image(pred_ch2)
 
-            self.writer.add_image(prefix + "seg_Sagittal_ch1", Sagittal_ch1, self.num_iterations, dataformats='CHW')
-            self.writer.add_image(prefix + "seg_Coronal_ch1", Coronal_ch1, self.num_iterations, dataformats='CHW')
-            self.writer.add_image(prefix + "seg_Horizontal_ch1", Horizontal_ch1, self.num_iterations, dataformats='CHW')
-            self.writer.add_image(prefix + "seg_Sagittal_ch2", Sagittal_ch2, self.num_iterations, dataformats='CHW')
-            self.writer.add_image(prefix + "seg_Coronal_ch2", Coronal_ch2, self.num_iterations, dataformats='CHW')
-            self.writer.add_image(prefix + "seg_Horizontal_ch2", Horizontal_ch2, self.num_iterations, dataformats='CHW')
-            self.writer.add_image(prefix + "seg_Sagittal_ch4", Sagittal_ch4, self.num_iterations, dataformats='CHW')
-            self.writer.add_image(prefix + "seg_Coronal_ch4", Coronal_ch4, self.num_iterations, dataformats='CHW')
-            self.writer.add_image(prefix + "seg_Horizontal_ch4", Horizontal_ch4, self.num_iterations, dataformats='CHW')
-            self.writer.add_image(prefix + "pred_Sagittal_ch1", Sagittal_pred_ch1, self.num_iterations,
+            self.writer.add_image(prefix + "seg_Sagittal_ch1", Sagittal_ch1, global_step, dataformats='CHW')
+            self.writer.add_image(prefix + "seg_Coronal_ch1", Coronal_ch1, global_step, dataformats='CHW')
+            self.writer.add_image(prefix + "seg_Horizontal_ch1", Horizontal_ch1, global_step, dataformats='CHW')
+            self.writer.add_image(prefix + "seg_Sagittal_ch2", Sagittal_ch2, global_step, dataformats='CHW')
+            self.writer.add_image(prefix + "seg_Coronal_ch2", Coronal_ch2, global_step, dataformats='CHW')
+            self.writer.add_image(prefix + "seg_Horizontal_ch2", Horizontal_ch2, global_step, dataformats='CHW')
+            self.writer.add_image(prefix + "seg_Sagittal_ch4", Sagittal_ch4, global_step, dataformats='CHW')
+            self.writer.add_image(prefix + "seg_Coronal_ch4", Coronal_ch4, global_step, dataformats='CHW')
+            self.writer.add_image(prefix + "seg_Horizontal_ch4", Horizontal_ch4, global_step, dataformats='CHW')
+            self.writer.add_image(prefix + "pred_Sagittal_ch1", Sagittal_pred_ch1, global_step,
                                   dataformats='CHW')
-            self.writer.add_image(prefix + "pred_Coronal_ch1", Coronal_pred_ch1, self.num_iterations, dataformats='CHW')
-            self.writer.add_image(prefix + "pred_Horizontal_ch1", Horizontal_pred_ch1, self.num_iterations,
+            self.writer.add_image(prefix + "pred_Coronal_ch1", Coronal_pred_ch1, global_step, dataformats='CHW')
+            self.writer.add_image(prefix + "pred_Horizontal_ch1", Horizontal_pred_ch1, global_step,
                                   dataformats='CHW')
-            self.writer.add_image(prefix + "pred_Sagittal_ch2", Sagittal_pred_ch2, self.num_iterations,
+            self.writer.add_image(prefix + "pred_Sagittal_ch2", Sagittal_pred_ch2, global_step,
                                   dataformats='CHW')
-            self.writer.add_image(prefix + "pred_Coronal_ch2", Coronal_pred_ch2, self.num_iterations, dataformats='CHW')
-            self.writer.add_image(prefix + "pred_Horizontal_ch2", Horizontal_pred_ch2, self.num_iterations,
+            self.writer.add_image(prefix + "pred_Coronal_ch2", Coronal_pred_ch2, global_step, dataformats='CHW')
+            self.writer.add_image(prefix + "pred_Horizontal_ch2", Horizontal_pred_ch2, global_step,
                                   dataformats='CHW')
-            self.writer.add_image(prefix + "pred_Sagittal_ch4", Sagittal_pred_ch4, self.num_iterations,
+            self.writer.add_image(prefix + "pred_Sagittal_ch4", Sagittal_pred_ch4, global_step,
                                   dataformats='CHW')
-            self.writer.add_image(prefix + "pred_Coronal_ch4", Coronal_pred_ch4, self.num_iterations, dataformats='CHW')
-            self.writer.add_image(prefix + "pred_Horizontal_ch4", Horizontal_pred_ch4, self.num_iterations,
+            self.writer.add_image(prefix + "pred_Coronal_ch4", Coronal_pred_ch4, global_step, dataformats='CHW')
+            self.writer.add_image(prefix + "pred_Horizontal_ch4", Horizontal_pred_ch4, global_step,
                                   dataformats='CHW')
+
+    def _add_noise(self, alfa):
+        model_parameters = list(filter(lambda p: p.requires_grad, self.model.parameters()))
+        for param in model_parameters:
+            noise = torch.randn(param.data.shape).to(self.device)
+            param.data += noise * alfa
 
     @staticmethod
     def _batch_size(input):
@@ -330,4 +273,3 @@ class UNet3DTrainer:
             return input[0].size(0)
         else:
             return input.size(0)
-

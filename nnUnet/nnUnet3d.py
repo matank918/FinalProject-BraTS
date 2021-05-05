@@ -50,8 +50,8 @@ class Abstract3DUNet(nn.Module):
         self.decoders = nn.ModuleList(decoders)
         self.output_activation = nn.ModuleList(output_activation_layers)
 
-        print(self.decoders)
-        print(self.output_activation)
+        # print(self.decoders)
+        # print(self.output_activation)
 
     def forward(self, x):
         # encoder part

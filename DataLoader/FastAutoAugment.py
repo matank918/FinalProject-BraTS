@@ -9,10 +9,11 @@ from sklearn.model_selection import StratifiedShuffleSplit
 from concurrent.futures import ProcessPoolExecutor
 from hyperopt import fmin, tpe, hp, STATUS_OK, Trials
 from utils.Log import get_logger, get_module_variable, get_log_name
+import utils.config as cfg
 import torch
 from DataLoader.CustomTransformations import *
 from utils.utils import split_dataset
-
+from trainer import UNet3DTrainer
 
 DEFALUT_CANDIDATES = [
     ShearXY,
@@ -28,8 +29,9 @@ DEFALUT_CANDIDATES = [
     Brightness,
     Sharpness,
     Cutout,
-#     SamplePairing,
+    #     SamplePairing,
 ]
+
 
 class FastAutoAugment:
     def __init__(self, model, dataset, device, optimizer, scheduler, loss_criterion, eval_criterion):
@@ -40,7 +42,7 @@ class FastAutoAugment:
         self.scheduler = scheduler
         self.loss_criterion = loss_criterion
         self.eval_criterion = eval_criterion
-
+        self.lr_scheduler = scheduler
 
     def fast_auto_augment(self, K=5, B=100, T=2, N=10, num_process=5):
         num_process = min(torch.cuda.device_count(), num_process)
@@ -51,12 +53,12 @@ class FastAutoAugment:
         transform_candidates = DEFALUT_CANDIDATES
 
         # split data set
-        Dm_indexes, Da_indexes = split_dataset(self.trainloader, K)
+        Dm_indexes, Da_indexes = split_dataset(self.dataset, K)
 
         with ProcessPoolExecutor(max_workers=num_process) as executor:
             for k, (Dm_indx, Da_indx) in enumerate(zip(Dm_indexes, Da_indexes)):
                 future = executor.submit(self.process_fn
-                                        ,Dm_indx, Da_indx, T, transform_candidates, B, N, k)
+                                         , Dm_indx, Da_indx, T, transform_candidates, B, N, k)
                 futures.append(future)
 
             for future in futures:
@@ -76,7 +78,7 @@ class FastAutoAugment:
         # train child model
         child_model = copy.deepcopy(self.model)
         logger = get_logger(cfg.log_path)
-        self.train_child(child_model, self.trainloader, Dm_indx, device, logger)
+        self.train_child(child_model, Dm_indx, device, logger)
 
         # # search sub policy
         # for t in range(T):
@@ -86,12 +88,10 @@ class FastAutoAugment:
         #
         # return _transform
 
-    def train_child(self, model, dataset, subset_indx, logger, device=None):
+    def train_child(self, model, subset_indx, logger, device=None):
 
-        dataset.transform = transforms.Compose([
-            transforms.Resize(32),
-            transforms.ToTensor()])
-        subset = Subset(dataset, subset_indx)
+        subset = Subset(self.dataset, subset_indx)
+        loaders = get_loaders(subset)
 
         if device:
             model = model.to(device)
@@ -100,14 +100,20 @@ class FastAutoAugment:
                 print('\n[+] Use {} GPUs'.format(torch.cuda.device_count()))
                 self.model = nn.DataParallel(self.model)
 
-        for step in range(len(subset)):
-            batch = next(self.trainloader)
-            trainer = trainerCNN(model=model, criterion=self.criterion, epochs=cfg.epochs, optimizer=self.optimizer,
-                                 device=device,
-                                 log_iter=cfg.log_iter, trainloader=batch, evalloader=None, logger=logger,
-                                 evel_iter=cfg.eval_iter, checkpoint_dir=None,
-                                 best_eval_score=cfg.best_eval_score)
-            trainer.fit()
+        trainer = UNet3DTrainer(model=model, logger=logger, optimizer=optimizer, loss_criterion=self.loss_criterion,
+                      lr_scheduler=self.lr_scheduler,
+                      eval_criterion=self.eval_criterion, device=device, loaders=loaders,
+                      num_iterations=cfg.num_iterations,
+                      validate_iters=cfg.validate_iters, checkpoint_dir=cfg.checkpoint_dir,
+                      best_eval_score=cfg.best_eval_score,
+                      validate_after_iters=cfg.validate_after_iters,
+                      log_after_iters=cfg.log_after_iters,
+                      num_epoch=cfg.num_epoch, max_num_iterations=cfg.max_num_iterations,
+                      eval_score_higher_is_better=cfg.eval_score_higher_is_better,
+                      max_num_epochs=cfg.max_num_epochs,
+                      accumulation_steps=cfg.accumulation_steps)
+
+        trainer.fit()
 
     def validate_child(self, model, dataset, subset_indx, transform, device=None):
         criterion = nn.CrossEntropyLoss()
@@ -120,7 +126,6 @@ class FastAutoAugment:
         # data_loader = get_dataloader(args, subset, pin_memory=False)
         #
         # return validate(args, model, criterion, data_loader, 0, None, device)
-
 
     def search_subpolicies_hyperopt(self, transform_candidates, child_model, Da_indx, B):
         def _objective(sampled):

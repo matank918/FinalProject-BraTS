@@ -3,8 +3,17 @@ import torch
 from torch.utils.data import Dataset
 import torchvision
 from DataLoader.CustomTransformations import RandomCrop3D, OneHotEncoding3d, ToTensor, CustomNormalize
+from torch.utils.data import DataLoader, random_split
 import numpy as np
 import nibabel as nib
+
+def get_loaders(dataset, val_percent, batch_size):
+    n_val = int(len(dataset) * val_percent)
+    n_train = len(dataset) - n_val
+    train, val = random_split(dataset, [n_train, n_val])
+    train_loader = DataLoader(train, batch_size=batch_size, shuffle=True, num_workers=8, pin_memory=True)
+    val_loader = DataLoader(val, batch_size=batch_size, shuffle=False, num_workers=8, pin_memory=True, drop_last=True)
+    return train_loader, val_loader
 
 
 class CustomDataset(Dataset):
@@ -21,7 +30,6 @@ class CustomDataset(Dataset):
             ToTensor(),
             *transforms,
             CustomNormalize()])
-        print(self.transforms)
 
         self.target_transform = torchvision.transforms.Compose([
             *target_transform,
