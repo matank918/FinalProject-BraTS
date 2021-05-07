@@ -6,6 +6,7 @@ from utils.utils import get_number_of_learnable_parameters
 import copy
 import importlib
 
+
 class Abstract3DUNet(nn.Module):
 
     def __init__(self, in_channels, out_channels, f_maps, apply_pooling, deep_supervision, basic_module=DoubleConv):
@@ -77,7 +78,8 @@ class Abstract3DUNet(nn.Module):
                 output_activation = self.output_activation[i]
                 encoders_feat = output_activation(x)
                 if (D, W, H) != input_dim:
-                    encoders_feat = nn.functional.interpolate(encoders_feat, size=input_dim, mode='trilinear')
+                    encoders_feat = nn.functional.interpolate(encoders_feat, size=input_dim, mode='trilinear',
+                                                              align_corners=True)
                 decoders_features.append(encoders_feat)
 
         return decoders_features
@@ -95,7 +97,7 @@ def get_model(in_channels, out_channels, f_maps, apply_pooling, deep_supervision
     basic_block = getattr(module, basic_block)
     return UNet3D(in_channels=in_channels, out_channels=out_channels, f_maps=f_maps,
                   apply_pooling=apply_pooling
-                  ,basic_module=basic_block, deep_supervision=deep_supervision)
+                  , basic_module=basic_block, deep_supervision=deep_supervision)
 
 
 if __name__ == '__main__':
@@ -105,6 +107,6 @@ if __name__ == '__main__':
     model = UNet3D(4, 4, f_maps, apply_pooling=False, basic_module=DoubleConv, deep_supervision=3)
     model.to(device)
     # x = model.training
-    # rand_image = torch.rand(2, 4, 128, 128, 128).to(device)
+    rand_image = torch.rand(2, 4, 128, 128, 128).to(device)
     # print(get_number_of_learnable_parameters(model))
-    # out = model(rand_image)
+    out = model(rand_image)

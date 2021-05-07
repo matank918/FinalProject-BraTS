@@ -3,30 +3,49 @@ import os
 import numpy as np
 from torchvision import transforms
 import torch.nn as nn
+import nibabel as nib
 
 from PIL import Image, ImageOps, ImageEnhance
 
+class LoadData(object):
 
-
-class OneHotEncoding3d(object):
     def __init__(self, dim):
         self.values = np.array([0, 1, 2, 4])
         self.one_hot = np.zeros((len(self.values),) + dim)
 
-    def __call__(self, seg):
+    def __call__(self, file_dir, with_names=False):
+        images = []
+        images_names = []
+        self.files_list = [os.path.join(file_dir, dI) for dI in os.listdir(file_dir)]
+        for file in self.files_list:
+            if 'seg' in file:
+                seg = nib.load(file).get_fdata()
+            else:
+                images_names.append(file[-12:-7])
+                image = (nib.load(file).get_fdata())
+                images.append(image)
+
+        images = np.stack(images, axis=0)
+
+        if with_names:
+            return images, self.OneHot(seg), images_names
+        else:
+            return images, self.OneHot(seg)
+
+    def OneHot(self, seg):
         for i, value in enumerate(self.values):
             self.one_hot[i] = (seg == value).astype(int)
         return self.one_hot
 
 
 class ToTensor(object):
-    def __call__(self, x):
-        return torch.tensor(x, dtype=torch.float32)
+    def __call__(self, img, seg):
+        return torch.tensor(img, dtype=torch.float32), torch.tensor(seg, dtype=torch.float32)
 
 
 class RandomCrop3D(object):
     def __init__(self, img_dim, crop_dim):
-        c, h, w, d = img_dim
+        h, w, d = img_dim
         assert (h, w, d) > crop_dim
         self.img_dim = tuple((h, w, d))
         self.crop_dim = tuple(crop_dim)
@@ -58,7 +77,6 @@ class CustomNormalize(object):
                 ((x[i][x[i].nonzero(as_tuple=True)] - torch.mean(non_zero_vox)) / torch.std(non_zero_vox))
 
         return x
-
 
 
 

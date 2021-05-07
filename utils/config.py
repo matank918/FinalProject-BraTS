@@ -27,9 +27,10 @@ loss_name = 'DiceLoss'
 eval_name = 'DiceMetric'
 
 # loader
-loader_path = r'C:\Users\User\Documents\FinalProject\MICCAI_BraTS2020\MICCAI_BraTS2020_TrainingData'
+# loader_path = r'C:\Users\User\Documents\FinalProject\MICCAI_BraTS2020\MICCAI_BraTS2020_TrainingData'
+loader_path = '/tcmldrive/shared/BraTS2020 Training/'
 val_percent = 0.1
-batch_size = 1
+batch_size = 2
 
 # optimizer
 deep_supervision = 3
@@ -38,7 +39,7 @@ optimizer_name = 'SGD'
 learning_rate = 0.01
 momentum = 0.99
 nesterov = True
-accumulation_steps = 2
+accumulation_steps = 1
 
 # train
 log_after_iters = 50
@@ -46,7 +47,6 @@ validate_after_iters = 50 # < len(traindata)
 max_num_epochs = 10
 
 best_eval_score = 0.65
-checkpoint_dir = r'./runs'
 
 # architecture
 kernel_size = (3, 3, 3)

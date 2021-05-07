@@ -53,3 +53,9 @@ def get_module_variable(module):
     if module:
         book = {key: value for key, value in module.__dict__.items() if not (key.startswith('__') or key.startswith('_'))}
     return book
+
+
+def get_checkpoint_dir():
+    log_name = get_log_name()
+    checkpoint_dir = '.\\runs\\' + log_name[0:-4] + '_' + 'ckpt' + '.pth'
+    return checkpoint_dir

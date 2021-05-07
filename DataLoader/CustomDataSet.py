@@ -2,10 +2,13 @@ import os
 import torch
 from torch.utils.data import Dataset
 import torchvision
-from DataLoader.CustomTransformations import RandomCrop3D, OneHotEncoding3d, ToTensor, CustomNormalize
+from DataLoader.BasicTransformations import *
+from DataLoader.GeometricTransformations import *
+import torchio as tio
+
 from torch.utils.data import DataLoader, random_split
 import numpy as np
-import nibabel as nib
+
 
 def get_loaders(dataset, val_percent, batch_size):
     n_val = int(len(dataset) * val_percent)
@@ -17,23 +20,25 @@ def get_loaders(dataset, val_percent, batch_size):
 
 
 class CustomDataset(Dataset):
-    def __init__(self, data_dir, transforms=()):
+    def __init__(self, data_dir, transforms=(), data_transform=()):
         """:param images_dir: (str)"""
 
         self.dir = data_dir
         self.training_dir = data_dir
         self.training_data = []
         self.folder_names = []
-        self.load_data = LoadData()
+        self.load_data = LoadData((240, 240, 155))
 
-        self.transforms = torchvision.transforms.Compose([
+        self.transform = Compose([
             ToTensor(),
-            *transforms,
-            CustomNormalize()])
+            # RandomFlip(0.2),
+            RandomCrop3D((240, 240, 155), (128, 128, 128)),
+            *transforms
+        ])
 
-        self.target_transform = torchvision.transforms.Compose([
-            OneHotEncoding3d((240, 240, 155)),
-            ToTensor()])
+        self.data_transform = torchvision.transforms.Compose([
+            *data_transform,
+            CustomNormalize()])
 
         self.get_folder_names()
 
@@ -48,36 +53,33 @@ class CustomDataset(Dataset):
 
     def __getitem__(self, i):
         data, seg = self.load_data(self.folder_names[i])
+        data, seg = self.transform(data, seg)
+        data = self.data_transform(data)
 
-        data = self.transforms(data)
-        seg = self.target_transform(seg)
-
-        self.rand_crop = RandomCrop3D(data.shape, crop_dim=(128, 128, 128))
-
-        data, seg = self.rand_crop(data, seg)
         return data, seg
 
 
-class LoadData(object):
+class Compose(object):
+    """Composes several transforms together.
+    Args:
+        transforms (list of ``Transform`` objects): list of transforms to compose.
+    """
 
-    def __call__(self, file_dir, with_names=False):
-        images = []
-        images_names = []
-        self.files_list = [os.path.join(file_dir, dI) for dI in os.listdir(file_dir)]
-        for file in self.files_list:
-            if 'seg' in file:
-                seg = nib.load(file).get_fdata()
-            else:
-                images_names.append(file[-12:-7])
-                image = (nib.load(file).get_fdata())
-                images.append(image)
+    def __init__(self, transforms):
+        self.transforms = transforms
 
-        images = np.stack(images, axis=0)
+    def __call__(self, img, seg):
+        for t in self.transforms:
+            img, seg = t(img, seg)
+        return img, seg
 
-        if with_names:
-            return images, seg, images_names
-        else:
-            return images, seg
+    def __repr__(self):
+        format_string = self.__class__.__name__ + '('
+        for t in self.transforms:
+            format_string += '\n'
+            format_string += '    {0}'.format(t)
+        format_string += '\n)'
+        return format_string
 
 
 if __name__ == '__main__':
