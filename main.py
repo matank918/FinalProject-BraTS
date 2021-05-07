@@ -3,14 +3,13 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from utils.utils import get_number_of_learnable_parameters
-from utils.Log import get_logger, get_module_variable
+from utils.Log import get_logger, get_module_variable, get_checkpoint_dir
 from trainer import UNet3DTrainer
 from DataLoader.CustomDataSet import CustomDataset, get_loaders
 from Loss.loss import create_loss
 from Loss.metrics import create_eval
 import utils.config as cfg
 from nnUnet.nnUnet3d import get_model
-from DataLoader.FastAutoAugment import FastAutoAugment
 import logging
 
 
@@ -23,6 +22,7 @@ def _create_optimizer(model):
 
 if __name__ == '__main__':
     # Load and log experiment configuration
+
     logger = get_logger(cfg.log_path)
     logger.info(cfg.id)
     logger.info(cfg.run_name)
@@ -32,7 +32,7 @@ if __name__ == '__main__':
     # Create the model
     model = get_model(in_channels=cfg.in_channels, out_channels=cfg.out_channels, f_maps=cfg.f_maps,
                        apply_pooling=cfg.apply_pooling, deep_supervision=cfg.deep_supervision, module_name=cfg.module_name,
-                       basic_block= cfg.basic_block)
+                       basic_block=cfg.basic_block)
 
     # use DataParallel if more than 1 GPU available
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -54,7 +54,7 @@ if __name__ == '__main__':
     eval_criterion = create_eval(cfg.eval_name)
 
     # Create data loaders
-    dataset = CustomDataset(cfg.loader_path)
+    dataset = CustomDataset(cfg.loader_path, transforms=(), data_transform=())
     train_loader, eval_loader = get_loaders(dataset, cfg.val_percent, cfg.batch_size)
 
     # Create the optimizer
@@ -64,19 +64,20 @@ if __name__ == '__main__':
     lr_lambda = lambda epoch: 0.99 * epoch
     lr_scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda)
 
+    checkpoint_dir = get_checkpoint_dir()
+
     # Create model trainer
     trainer = UNet3DTrainer(model=model, logger=logger, optimizer=optimizer, loss_criterion=loss_criterion,
                             lr_scheduler=lr_scheduler, device=device,
                             eval_criterion=eval_criterion,
-                            checkpoint_dir=cfg.checkpoint_dir,
+                            checkpoint_dir=checkpoint_dir,
                             best_eval_score=cfg.best_eval_score,
                             validate_after_iters=cfg.validate_after_iters,
                             log_after_iters=cfg.log_after_iters,
-                            max_num_iterations=cfg.max_num_iterations,
                             max_num_epochs=cfg.max_num_epochs,
                             accumulation_steps=cfg.accumulation_steps)
     # Start training
-    trainer.fit(train_loader, eval_loader)
+    trainer.train(train_loader, eval_loader)
 
     # Auto = FastAutoAugment(model=model, loss_criterion=loss_criterion,optimizer=optimizer,
     #                        scheduler=lr_scheduler, device=device,

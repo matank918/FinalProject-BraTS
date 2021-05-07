@@ -1,10 +1,11 @@
 import torch
 import matplotlib.pyplot as plt
 import torchvision
-from DataLoader.CustomTransformations import ToTensor, CustomNormalize, RandomCrop3D, OneHotEncoding3d
+from DataLoader.BasicTransformations import *
 from utils.utils import split_image
 from DataLoader.CustomDataSet import CustomDataset, LoadData
 from torchvision import transforms, datasets
+from DataLoader.GeometricTransformations import *
 
 
 def show_image(image, name=None):
@@ -49,30 +50,26 @@ if __name__ == '__main__':
     # load = LoadData()
     # data, seg = load(file_dir=dir)
 
-    dir = r'C:\Users\User\Documents\FinalProject\MICCAI_BraTS2020\MICCAI_BraTS2020_TrainingData'
-    transform_train = (
-        transforms.RandomAffine(scale=(0.95, 1.05), degrees=8, shear=0.15, translate=(0.1, 0.1)),)
-    dataset = CustomDataset(data_dir=dir, transforms=transform_train)
+    # dir = r'C:\Users\User\Documents\FinalProject\MICCAI_BraTS2020\MICCAI_BraTS2020_TrainingData'
+    loader_path = '/tcmldrive/shared/BraTS2020 Training/'
+
+    # transform_train = (RandomFlip(1,0.7),TranslateXYZ(1,0.7), Rotate(1,0.1), RandomElasticDeformation(1,0.1))
+    # transform_target = (Rotate(1,0.5),)
+    dataset = CustomDataset(data_dir=loader_path, transforms=())
+    # dataset = CustomDataset(data_dir=dir, data_exploration=True)
+
     data, seg = dataset.__getitem__(17)
 
     mri1, mri2, mri3, mri4 = torch.chunk(data, dim=0, chunks=4)
-    mri1 = torch.squeeze(mri1)
-    mri2 = torch.squeeze(mri2)
-    mri3 = torch.squeeze(mri3)
-    mri4 = torch.squeeze(mri4)
 
-    show_image(mri1)
-    show_image(mri2)
-    show_image(mri3)
-    show_image(mri4)
+    show_image(torch.squeeze(mri1))
+    # show_image(torch.squeeze(mri2))
+    # show_image(torch.squeeze(mri3))
+    # show_image(torch.squeeze(mri4))
 
     _, ch1, ch2, ch4 = torch.chunk(seg, dim=0, chunks=4)
-    ch1 = torch.squeeze(ch1)
-    ch2 = torch.squeeze(ch2)
-    ch4 = torch.squeeze(ch4)
 
-    show_image(ch1, "ch1")
-    show_image(ch2, "ch2")
-    show_image(ch4, "ch4")
+    # show_image(torch.squeeze(ch1), "ch1")
+    show_image(torch.squeeze(ch2), "ch2")
+    # show_image(torch.squeeze(ch4), "ch4")
 
-    histogram_image(mri1)

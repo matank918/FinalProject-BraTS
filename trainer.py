@@ -21,14 +21,13 @@ class UNet3DTrainer:
         device (torch.device): device to train on
         checkpoint_dir (string): dir for saving checkpoints and tensorboard logs
         max_num_epochs (int): maximum number of epochs
-        max_num_iterations (int): maximum number of iterations
         validate_after_iters (int): validate after that many iterations
         log_after_iters (int): number of iterations before logging to tensorboard
     """
 
     def __init__(self, model, logger, optimizer, loss_criterion, lr_scheduler,
                  eval_criterion, device, checkpoint_dir, best_eval_score,
-                 validate_after_iters, log_after_iters, max_num_iterations,
+                 validate_after_iters, log_after_iters,
                  max_num_epochs, accumulation_steps):
 
         self.logger = logger
@@ -42,7 +41,6 @@ class UNet3DTrainer:
         self.device = device
         self.checkpoint_dir = checkpoint_dir
         self.max_num_epochs = max_num_epochs
-        self.max_num_iterations = max_num_iterations
         self.validate_after_iters = validate_after_iters
         self.log_after_iters = log_after_iters
 
@@ -54,7 +52,7 @@ class UNet3DTrainer:
             # initialize the best_eval_score
             self.best_eval_score = float('-inf')
 
-    def fit(self, trainloaders, evalloader):
+    def train(self, trainloaders, evalloader):
         for num_epoch in range(1, self.max_num_epochs + 1):
             train_losses = RunningAverage()
             train_eval_scores = RunningAverage()
@@ -63,11 +61,11 @@ class UNet3DTrainer:
             self.model.train()
             for i, batch in enumerate(trainloaders, start=1):
 
-                iter_time = time.clock()
+                iter_time = time.time()
 
                 input, target = self._split_batch(batch)
 
-                print(f'Training iteration [{i}/{self.max_num_iterations}]. '
+                print(f'Training iteration [{i}/{len(trainloaders)+1}]. '
                       f'Epoch [{num_epoch}/{self.max_num_epochs}]')
 
                 # get output from the net, calculate the loss
@@ -115,8 +113,8 @@ class UNet3DTrainer:
                     self._log_params(global_step)
                     # self._log_images(input, global_step, target, output, 'train_')
 
-                iter_time = time.clock() - iter_time
-                self.logger.info(f"duration for iter {i} is {int(iter_time)} seconds")
+                iter_time = time.time() - iter_time
+                self.logger.info(f"duration for iter {i} is {(round(iter_time, 2))} seconds")
 
             # adjust learning rate if necessary
             if self.scheduler is not None:
@@ -189,7 +187,6 @@ class UNet3DTrainer:
                  'optimizer_state_dict': self.optimizer.state_dict(),
                  'device': str(self.device),
                  'max_num_epochs': self.max_num_epochs,
-                 'max_num_iterations': self.max_num_iterations,
                  'validate_after_iters': self.validate_after_iters,
                  'log_after_iters': self.log_after_iters,
                  }
