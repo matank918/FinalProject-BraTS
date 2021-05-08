@@ -7,21 +7,35 @@ import shutil
 from sklearn.model_selection import StratifiedShuffleSplit
 
 
-def split_dataset(dataset, k):
-    # load dataset
-    X = list(range(len(dataset)))
-    Y = dataset.targets
+import torch
+from torch import nn
+import torch.nn.functional as F
 
-    # split to k-fold
-    assert len(X) == len(Y)
 
-    def _it_to_list(_it):
-        return list(zip(*list(_it)))
+def sum_tensor(inp, axes, keepdim=False):
+    axes = np.unique(axes).astype(int)
+    if keepdim:
+        for ax in axes:
+            inp = inp.sum(int(ax), keepdim=True)
+    else:
+        for ax in sorted(axes, reverse=True):
+            inp = inp.sum(int(ax))
+    return inp
 
-    sss = StratifiedShuffleSplit(n_splits=k,  test_size=0.1)
-    Dm_indexes, Da_indexes = _it_to_list(sss.split(X, Y))
 
-    return Dm_indexes, Da_indexes
+def mean_tensor(inp, axes, keepdim=False):
+    axes = np.unique(axes).astype(int)
+    if keepdim:
+        for ax in axes:
+            inp = inp.mean(int(ax), keepdim=True)
+    else:
+        for ax in sorted(axes, reverse=True):
+            inp = inp.mean(int(ax))
+    return inp
+
+
+softmax_helper = lambda x: F.softmax(x, 1)
+
 
 
 def flatten(tensor):

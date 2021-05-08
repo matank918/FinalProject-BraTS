@@ -7,9 +7,9 @@ Created on Wed May 27 17:19:37 2020
 
 # general
 log_path = r'./runs'
-id = 3
-run_name = "Dry run3 -gradient accumulation verification"
-run_purpose = "compare gradient accumulation to batch size"
+id = 10000
+run_name = "Dry runs"
+run_purpose = ""
 
 # model
 model_name = 'UNet3D'
@@ -20,7 +20,7 @@ out_channels = 4
 f_maps = [32, 64, 128, 256, 320, 320]
 apply_pooling = False
 
-# loss and eveal
+# loss and eval
 loss_name = 'DiceLoss'
 # loss_name = 'BCEDiceLoss'
 # loss_name = 'GeneralizedDiceLoss'
@@ -34,17 +34,13 @@ batch_size = 2
 
 # optimizer
 deep_supervision = 3
-optimizer_name = 'SGD'
-# optimizer_name = 'Adam'
-learning_rate = 0.01
-momentum = 0.99
-nesterov = True
+initial_lr = 0.005
 accumulation_steps = 1
-
+lr_scheduler_patience = 30
+lr_scheduler_eps = 1e-3
+weight_decay = 3e-5
 # train
-log_after_iters = 50
-validate_after_iters = 50 # < len(traindata)
-max_num_epochs = 10
+max_num_epochs = 15
 
 best_eval_score = 0.65
 

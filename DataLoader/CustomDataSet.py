@@ -21,7 +21,6 @@ def get_loaders(dataset, val_percent, batch_size):
 
 class CustomDataset(Dataset):
     def __init__(self, data_dir, transforms=(), data_transform=()):
-        """:param images_dir: (str)"""
 
         self.dir = data_dir
         self.training_dir = data_dir
@@ -38,7 +37,8 @@ class CustomDataset(Dataset):
 
         self.data_transform = torchvision.transforms.Compose([
             *data_transform,
-            CustomNormalize()])
+            CustomNormalize()
+            ])
 
         self.get_folder_names()
 

@@ -21,14 +21,11 @@ class UNet3DTrainer:
         device (torch.device): device to train on
         checkpoint_dir (string): dir for saving checkpoints and tensorboard logs
         max_num_epochs (int): maximum number of epochs
-        validate_after_iters (int): validate after that many iterations
-        log_after_iters (int): number of iterations before logging to tensorboard
     """
 
     def __init__(self, model, logger, optimizer, loss_criterion, lr_scheduler,
-                 eval_criterion, device, checkpoint_dir, best_eval_score,
-                 validate_after_iters, log_after_iters,
-                 max_num_epochs, accumulation_steps):
+                 eval_criterion, device, best_eval_score,
+                 max_num_epochs, accumulation_steps, checkpoint_dir=None):
 
         self.logger = logger
         self.writer = SummaryWriter()
@@ -41,8 +38,6 @@ class UNet3DTrainer:
         self.device = device
         self.checkpoint_dir = checkpoint_dir
         self.max_num_epochs = max_num_epochs
-        self.validate_after_iters = validate_after_iters
-        self.log_after_iters = log_after_iters
 
         self.logger.info(model)
 
@@ -56,6 +51,8 @@ class UNet3DTrainer:
         for num_epoch in range(1, self.max_num_epochs + 1):
             train_losses = RunningAverage()
             train_eval_scores = RunningAverage()
+            epoch_time = time.time()
+
 
             # sets the model in training mode
             self.model.train()
@@ -65,7 +62,7 @@ class UNet3DTrainer:
 
                 input, target = self._split_batch(batch)
 
-                print(f'Training iteration [{i}/{len(trainloaders)+1}]. '
+                print(f'Training iteration [{i}/{len(trainloaders)}]. '
                       f'Epoch [{num_epoch}/{self.max_num_epochs}]')
 
                 # get output from the net, calculate the loss
@@ -84,46 +81,45 @@ class UNet3DTrainer:
                     self.optimizer.step()
                     self.optimizer.zero_grad()
 
-                if i % self.validate_after_iters == 0:
-                    global_step = num_epoch * len(trainloaders) + i
-
-                    # evaluate during training
-                    if evalloader is not None:
-                        self.model.eval()
-                        # evaluate on validation set
-                        val_losses, eval_score = self.validate(evalloader)
-                        self._log_stats(global_step, 'val', val_losses, eval_score)
-
-                        # set the model back to training mode
-                        self.model.train()
-
-                        # remember best validation metric
-                        is_best = self._is_best_eval_score(eval_score)
-                        if is_best:
-                            self._save_checkpoint(i, num_epoch)
-
-                if i % self.log_after_iters == 0:
-                    global_step = num_epoch * len(trainloaders) + i
-
-                    # log stats, params and images
-                    self.logger.info(
-                        f'Training stats. Loss: {train_losses.avg}. Evaluation score: {train_eval_scores.avg}')
-
-                    self._log_stats(global_step, 'train', train_losses.avg, train_eval_scores.avg)
-                    self._log_params(global_step)
-                    # self._log_images(input, global_step, target, output, 'train_')
-
                 iter_time = time.time() - iter_time
-                self.logger.info(f"duration for iter {i} is {(round(iter_time, 2))} seconds")
+                # self.logger.info(f"Iter {i} duration is {(round(iter_time, 2))} seconds")
 
-            # adjust learning rate if necessary
-            if self.scheduler is not None:
-                global_step = num_epoch * len(trainloaders)
-                self.scheduler.step()
-                # log current learning rate in tensorboard
-                self._log_lr(global_step)
+            # evaluate after each epoch
+            global_step = num_epoch * len(trainloaders)
+            if evalloader is not None:
+                self.model.eval()
+                # evaluate on validation set
+                val_losses, eval_score = self.validate(evalloader)
+                self._log_stats(global_step, 'val', val_losses, eval_score)
 
-            self.logger.info(f"Reached maximum number of epochs: {self.max_num_epochs}. Finishing training...")
+                # set the model back to training mode
+                self.model.train()
+
+                # remember best validation metric
+                is_best = self._is_best_eval_score(eval_score)
+                if is_best:
+                    pass
+                    # self._save_checkpoint(num_epoch)
+
+                # adjust learning rate if necessary
+                if self.scheduler is not None:
+                    global_step = num_epoch * len(trainloaders)
+                    self.scheduler.step(val_losses)
+                    # log current learning rate in tensorboard
+                    self._log_lr(global_step)
+
+            self.logger.info(
+                f'Training stats. Loss: {train_losses.avg}. Evaluation score: {train_eval_scores.avg}')
+
+            self._log_stats(global_step, 'train', train_losses.avg, train_eval_scores.avg)
+            self._log_params(global_step)
+            # log stats, params and images
+            # self._log_images(input, global_step, target, output, 'train_')
+
+            epoch_time = time.time() - epoch_time
+            self.logger.info(f"epoch {num_epoch} duration is {(round(epoch_time / 60, 2))} minutes")
+
+        self.logger.info(f"Reached maximum number of epochs: {self.max_num_epochs}. Finishing training...")
 
     def validate(self, evalloader):
 
@@ -174,31 +170,29 @@ class UNet3DTrainer:
 
         return is_best
 
-    def _save_checkpoint(self, num_iterations, num_epoch):
-        if isinstance(self.model, nn.DataParallel):
-            state_dict = self.model.module.state_dict()
-        else:
-            state_dict = self.model.state_dict()
+    def _save_checkpoint(self, num_epoch):
+        if self.checkpoint_dir is not None:
+            if isinstance(self.model, nn.DataParallel):
+                state_dict = self.model.module.state_dict()
+            else:
+                state_dict = self.model.state_dict()
 
-        state = {'epoch': num_epoch + 1,
-                 'num_iterations': num_iterations,
-                 'model_state_dict': state_dict,
-                 'best_eval_score': self.best_eval_score,
-                 'optimizer_state_dict': self.optimizer.state_dict(),
-                 'device': str(self.device),
-                 'max_num_epochs': self.max_num_epochs,
-                 'validate_after_iters': self.validate_after_iters,
-                 'log_after_iters': self.log_after_iters,
-                 }
+            state = {'epoch': num_epoch + 1,
+                     'model_state_dict': state_dict,
+                     'best_eval_score': self.best_eval_score,
+                     'optimizer_state_dict': self.optimizer.state_dict(),
+                     'device': str(self.device),
+                     'max_num_epochs': self.max_num_epochs,
+                     }
 
-        if not os.path.exists(self.checkpoint_dir):
-            self.logger.info(
-                f"Checkpoint directory does not exists. Creating {self.checkpoint_dir}")
-            os.mkdir(self.checkpoint_dir)
+            if not os.path.exists(self.checkpoint_dir):
+                self.logger.info(
+                    f"Checkpoint directory does not exists. Creating {self.checkpoint_dir}")
+                os.mkdir(self.checkpoint_dir)
 
-        last_file_path = os.path.join(self.checkpoint_dir, 'last_checkpoint.pytorch')
-        self.logger(f"Saving last checkpoint to '{last_file_path}'")
-        torch.save(state, last_file_path)
+            last_file_path = os.path.join(self.checkpoint_dir, 'last_checkpoint.pytorch')
+            self.logger(f"Saving last checkpoint to '{last_file_path}'")
+            torch.save(state, last_file_path)
 
     def _log_lr(self, global_step):
         lr = self.optimizer.param_groups[0]['lr']

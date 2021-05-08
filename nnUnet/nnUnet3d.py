@@ -1,13 +1,15 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from nnUnet.UnetParts import Encoder, Decoder
 from nnUnet.BuildingBlocks import DoubleConv
-from utils.utils import get_number_of_learnable_parameters
+from utils.utils import get_number_of_learnable_parameters, softmax_helper
 import copy
 import importlib
+from nnUnet.initialization import InitWeights_He
 
 
-class Abstract3DUNet(nn.Module):
+class UNet3D(nn.Module):
 
     def __init__(self, in_channels, out_channels, f_maps, apply_pooling, deep_supervision, basic_module=DoubleConv):
         """
@@ -18,9 +20,9 @@ class Abstract3DUNet(nn.Module):
               :param basic_module: (nn.Module) the base module for the net (default is DoubleConv)
               :param deep_supervision: (int) apply deep supervision for number of layer.
           """
+        super().__init__()
         self.deep_supervision = deep_supervision
 
-        super(Abstract3DUNet, self).__init__()
 
         # create encoder path consisting of Encoder modules. Depth of the encoder is equal to `len(f_maps)`
         encoders = []
@@ -43,8 +45,7 @@ class Abstract3DUNet(nn.Module):
             out_feature_num = reversed_f_maps[i]
 
             decoder = Decoder(in_feature_num, out_feature_num, basic_module=basic_module)
-            output_activation = nn.Sequential(nn.Conv3d(out_feature_num, out_channels, kernel_size=(1, 1, 1)),
-                                              nn.Softmax(dim=1))
+            output_activation = nn.Sequential(nn.Conv3d(out_feature_num, out_channels, kernel_size=(1, 1, 1)))
             decoders.append(decoder)
             output_activation_layers.append(output_activation)
 
@@ -53,6 +54,8 @@ class Abstract3DUNet(nn.Module):
 
         # print(self.decoders)
         # print(self.output_activation)
+
+        self.apply(InitWeights_He())
 
     def forward(self, x):
         # encoder part
@@ -80,24 +83,18 @@ class Abstract3DUNet(nn.Module):
                 if (D, W, H) != input_dim:
                     encoders_feat = nn.functional.interpolate(encoders_feat, size=input_dim, mode='trilinear',
                                                               align_corners=True)
+
                 decoders_features.append(encoders_feat)
 
         return decoders_features
 
 
-class UNet3D(Abstract3DUNet):
-    def __init__(self, in_channels, out_channels, f_maps, apply_pooling, basic_module, deep_supervision):
-        super(UNet3D, self).__init__(in_channels=in_channels, out_channels=out_channels,
-                                     f_maps=f_maps, apply_pooling=apply_pooling, basic_module=basic_module,
-                                     deep_supervision=deep_supervision)
-
-
-def get_model(in_channels, out_channels, f_maps, apply_pooling, deep_supervision, module_name, basic_block):
+def get_model(in_channels, out_channels, f_maps, apply_pooling, deep_supervision, module_name, basic_block, apply_nonlin):
     module = importlib.import_module(module_name)
     basic_block = getattr(module, basic_block)
     return UNet3D(in_channels=in_channels, out_channels=out_channels, f_maps=f_maps,
                   apply_pooling=apply_pooling
-                  , basic_module=basic_block, deep_supervision=deep_supervision)
+                  ,basic_module=basic_block, deep_supervision=deep_supervision)
 
 
 if __name__ == '__main__':

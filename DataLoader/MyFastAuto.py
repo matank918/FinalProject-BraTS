@@ -5,15 +5,16 @@ import torch
 import random
 import torchvision.transforms as transforms
 from torch.utils.data import Subset
-from sklearn.model_selection import StratifiedShuffleSplit
 from concurrent.futures import ProcessPoolExecutor
 from hyperopt import fmin, tpe, hp, STATUS_OK, Trials
 import utils.config as cfg
-from sklearn.model_selection import KFold
+from sklearn.model_selection import KFold, StratifiedShuffleSplit
 import torch.optim as optim
 from utils.Log import get_logger, get_module_variable
+from utils.utils import *
+
 from trainer import UNet3DTrainer
-from DataLoader.CustomDataSet import CustomDataset, get_loaders
+from DataLoader.CustomDataSet import *
 from Loss.loss import create_loss
 from Loss.metrics import create_eval
 from nnUnet.nnUnet3d import get_model
@@ -22,7 +23,7 @@ import torchio as tio
 from DataLoader.BasicTransformations import *
 from DataLoader.GeometricTransformations import *
 
-GeometricTransform = [TranslateXYZ, Rotate, Scale, RandomElasticDeformation]
+GeometricTransform = [Rotate]
 
 
 class FastAutoAugment:
@@ -36,7 +37,17 @@ class FastAutoAugment:
         self.lr_scheduler = scheduler
         self.logger = logger
 
-    def fast_auto_augment(self, K=3, B=100, T=2, N=10, num_process=3):
+    def fast_auto_augment(self, K=5, B=20, T=1, N=10, num_process=3):
+        """
+
+        :param K: number of folds for the k-cross validation
+        :param B: number of epoch for the hyperopt search
+        :param T: number of Searches for each epoch
+        :param N: number of subpolicies
+        :param num_process:
+        :return:
+        """
+
         num_process = min(torch.cuda.device_count(), num_process)
         transform, futures = [], []
 
@@ -46,13 +57,12 @@ class FastAutoAugment:
 
         # split data set
         # Define the K-fold Cross Validator
+
         kfold = KFold(n_splits=K, shuffle=True)
 
         for fold, (Dm_indx, Da_indx) in enumerate(kfold.split(self.dataset)):
             transform = self.process_fn(Dm_indx, Da_indx, T, transform_candidates, B, N, fold)
             transform.extend(transform)
-
-        transform = transforms.RandomChoice(transform)
 
         return transform
 
@@ -63,7 +73,6 @@ class FastAutoAugment:
         _transform = []
         print('[+] Child %d training strated (GPU: %d)' % (fold, device_id))
 
-        model = copy.deepcopy(self.model)
         self.reset_weights(model)
         # start training
         trainer = self.train(Dm_indx, device=device)
@@ -77,17 +86,15 @@ class FastAutoAugment:
     def train(self, Dm_indx, device):
         train_subset = Subset(self.dataset, Dm_indx)
         trainloader = torch.utils.data.DataLoader(train_subset, batch_size=cfg.batch_size)
+        self.model.to(device)
 
-        trainer = UNet3DTrainer(model=model, logger=self.logger, optimizer=self.optimizer,
+        trainer = UNet3DTrainer(model=self.model, logger=self.logger, optimizer=self.optimizer,
                                 loss_criterion=self.loss_criterion,
                                 lr_scheduler=self.lr_scheduler,
                                 eval_criterion=self.eval_criterion, device=device,
-                                checkpoint_dir=cfg.checkpoint_dir,
                                 best_eval_score=cfg.best_eval_score,
-                                validate_after_iters=cfg.validate_after_iters,
                                 log_after_iters=cfg.log_after_iters,
-                                max_num_iterations=cfg.max_num_iterations,
-                                max_num_epochs=cfg.max_num_epochs,
+                                max_num_epochs=1,
                                 accumulation_steps=cfg.accumulation_steps)
 
         trainer.train(trainloader, None)
@@ -103,11 +110,10 @@ class FastAutoAugment:
             subpolicy = Compose([
             ToTensor(),
             RandomCrop3D((240, 240, 155), (128, 128, 128)),
-            tio.transforms.RandomFlip(flip_probability=0.2),
+            # tio.transforms.RandomFlip(flip_probability=0.2),
             *subpolicy
         ])
-            val_res = self.validate(Da_indx, trainer, subpolicy)
-            loss = val_res[0].cpu().numpy()
+            loss, _ = self.validate(Da_indx, trainer, subpolicy)
             return {'loss': loss, 'status': STATUS_OK}
 
         space = [
@@ -122,6 +128,7 @@ class FastAutoAugment:
                     trials=trials)
 
         subpolicies = []
+        print(len(trials.trials))
         for t in trials.trials:
             vals = t['misc']['vals']
             subpolicy = [transform_candidates[vals['transform1'][0]](vals['prob1'][0], vals['mag1'][0]),
@@ -130,9 +137,10 @@ class FastAutoAugment:
                 ## to tensor
                 ToTensor(),
                 ## policy
-                *subpolicy,
-                CustomNormalize()])
+                *subpolicy])
             subpolicies.append((subpolicy, t['result']['loss']))
+
+        print(subpolicies)
 
         return subpolicies
 
@@ -193,4 +201,4 @@ if __name__ == '__main__':
                            scheduler=lr_scheduler,
                            eval_criterion=eval_criterion, dataset=dataset, logger=logger)
 
-    Auto.fast_auto_augment()
+    print(Auto.fast_auto_augment())
