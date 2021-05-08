@@ -23,7 +23,6 @@ class UNet3D(nn.Module):
         super().__init__()
         self.deep_supervision = deep_supervision
 
-
         # create encoder path consisting of Encoder modules. Depth of the encoder is equal to `len(f_maps)`
         encoders = []
         for i in range(len(f_maps)):
@@ -45,7 +44,8 @@ class UNet3D(nn.Module):
             out_feature_num = reversed_f_maps[i]
 
             decoder = Decoder(in_feature_num, out_feature_num, basic_module=basic_module)
-            output_activation = nn.Sequential(nn.Conv3d(out_feature_num, out_channels, kernel_size=(1, 1, 1)))
+            output_activation = nn.Sequential(nn.Conv3d(out_feature_num, out_channels, kernel_size=(1, 1, 1)),
+                                              nn.Softmax(dim=1))
             decoders.append(decoder)
             output_activation_layers.append(output_activation)
 
@@ -87,14 +87,6 @@ class UNet3D(nn.Module):
                 decoders_features.append(encoders_feat)
 
         return decoders_features
-
-
-def get_model(in_channels, out_channels, f_maps, apply_pooling, deep_supervision, module_name, basic_block, apply_nonlin):
-    module = importlib.import_module(module_name)
-    basic_block = getattr(module, basic_block)
-    return UNet3D(in_channels=in_channels, out_channels=out_channels, f_maps=f_maps,
-                  apply_pooling=apply_pooling
-                  ,basic_module=basic_block, deep_supervision=deep_supervision)
 
 
 if __name__ == '__main__':

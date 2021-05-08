@@ -51,7 +51,7 @@ class SingleConv(nn.Module):
 
 
 class BatchDoubleConv(nn.Module):
-    """(convolution => [BD] => LeakyReLU) * 2
+    """(convolution => [BN] => LeakyReLU) * 2
       Args:
           :param in_channels:(int) number of input channels
           :param out_channels: (int) number of output segmentation masks;

@@ -7,6 +7,7 @@ import nibabel as nib
 
 from PIL import Image, ImageOps, ImageEnhance
 
+
 class LoadData(object):
 
     def __init__(self, dim):
@@ -79,9 +80,3 @@ class CustomNormalize(object):
         return x
 
 
-
-if __name__ == '__main__':
-    a = (240, 240, 155)
-    b = 4
-    new = (b,) + a
-    print(new)
