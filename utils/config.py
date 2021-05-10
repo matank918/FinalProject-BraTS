@@ -40,6 +40,10 @@ deep_supervision = 0
 initial_lr = 3e-4
 momentum = 0.99
 weight_decay = 3e-5
+nesterov = True
+amsgrad = True
+
+include_background = True
 # train
 max_num_epochs = 10
 best_eval_score = 0.7

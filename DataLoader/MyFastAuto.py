@@ -17,13 +17,12 @@ from trainer import UNet3DTrainer
 from DataLoader.CustomDataSet import *
 from Loss.loss import create_loss
 from Loss.metrics import create_eval
-from nnUnet.nnUnet3d import get_model
 from pathlib import Path
 import torchio as tio
 from DataLoader.BasicTransformations import *
-from DataLoader.GeometricTransformations import *
+from DataLoader.CustomTransformation import *
 
-GeometricTransform = [Rotate]
+Transform = [RandGaussianNoise3D, Rotate3D, Scale3D, TranslateXYZ]
 
 
 class FastAutoAugment:
@@ -42,7 +41,7 @@ class FastAutoAugment:
 
         :param K: number of folds for the k-cross validation
         :param B: number of epoch for the hyperopt search
-        :param T: number of Searches for each epoch
+        :param T: number of Searches for in each model
         :param N: number of subpolicies
         :param num_process:
         :return:
@@ -53,13 +52,11 @@ class FastAutoAugment:
 
         torch.multiprocessing.set_start_method('spawn', force=True)
 
-        transform_candidates = GeometricTransform
+        transform_candidates = Transform
 
         # split data set
         # Define the K-fold Cross Validator
-
         kfold = KFold(n_splits=K, shuffle=True)
-
         for fold, (Dm_indx, Da_indx) in enumerate(kfold.split(self.dataset)):
             transform = self.process_fn(Dm_indx, Da_indx, T, transform_candidates, B, N, fold)
             transform.extend(transform)
@@ -73,7 +70,7 @@ class FastAutoAugment:
         _transform = []
         print('[+] Child %d training strated (GPU: %d)' % (fold, device_id))
 
-        self.reset_weights(model)
+        self.reset_weights(self.model)
         # start training
         trainer = self.train(Dm_indx, device=device)
 
@@ -93,9 +90,10 @@ class FastAutoAugment:
                                 lr_scheduler=self.lr_scheduler,
                                 eval_criterion=self.eval_criterion, device=device,
                                 best_eval_score=cfg.best_eval_score,
-                                log_after_iters=cfg.log_after_iters,
                                 max_num_epochs=1,
-                                accumulation_steps=cfg.accumulation_steps)
+                                accumulation_steps=cfg.accumulation_steps,
+                                log_after_iter=cfg.log_after_iter,
+                                validate_after_iter=cfg.validate_after_iter)
 
         trainer.train(trainloader, None)
 
@@ -108,11 +106,14 @@ class FastAutoAugment:
                          for transform, prob, mag in sampled]
 
             subpolicy = Compose([
-            ToTensor(),
-            RandomCrop3D((240, 240, 155), (128, 128, 128)),
-            # tio.transforms.RandomFlip(flip_probability=0.2),
-            *subpolicy
-        ])
+                LoadData((240, 240, 155)),
+                RandSpatialCropd(
+                    keys=["image", "seg"], roi_size=[128, 128, 128], random_size=False
+                ),
+                NormalizeIntensityd(keys="image", nonzero=True, channel_wise=True),
+                *subpolicy,
+                ToTensord(keys=["image", "seg"])
+            ])
             loss, _ = self.validate(Da_indx, trainer, subpolicy)
             return {'loss': loss, 'status': STATUS_OK}
 
@@ -133,11 +134,13 @@ class FastAutoAugment:
             vals = t['misc']['vals']
             subpolicy = [transform_candidates[vals['transform1'][0]](vals['prob1'][0], vals['mag1'][0]),
                          transform_candidates[vals['transform2'][0]](vals['prob2'][0], vals['mag2'][0])]
-            subpolicy = transforms.Compose([
-                ## to tensor
-                ToTensor(),
-                ## policy
-                *subpolicy])
+            subpolicy = Compose([
+                LoadData((240, 240, 155)),
+                RandSpatialCropd(keys=["image", "seg"], roi_size=[128, 128, 128], random_size=False),
+                NormalizeIntensityd(keys="image", nonzero=True, channel_wise=True),
+                *subpolicy,
+                ToTensord(keys=["image", "seg"])
+            ])
             subpolicies.append((subpolicy, t['result']['loss']))
 
         print(subpolicies)
@@ -175,10 +178,6 @@ if __name__ == '__main__':
     logger = get_logger(cfg.log_path)
 
     # Create the model
-    model = get_model(in_channels=cfg.in_channels, out_channels=cfg.out_channels, f_maps=cfg.f_maps,
-                      apply_pooling=cfg.apply_pooling, deep_supervision=cfg.deep_supervision,
-                      module_name=cfg.module_name,
-                      basic_block=cfg.basic_block)
 
     # Create loss criterion
     loss_criterion = create_loss(cfg.loss_name)

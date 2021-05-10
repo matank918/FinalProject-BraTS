@@ -10,10 +10,11 @@ from monai.config import DtypeLike, KeysCollection
 
 class BaseTransform(ABC):
 
-    def __init__(self, keys, prob, mag=0):
+    def __init__(self, keys, prob, mag=0, mode='nearest'):
         self.keys = keys
         self.prob = prob
         self.mag = mag
+        self.mode = mode
 
     def __call__(self, data):
         return self.transform(data)
@@ -37,7 +38,7 @@ class RandGaussianNoise3D(BaseTransform):
 class TranslateXYZ(BaseTransform):
     def transform(self, data):
         translation = (-int(self.mag * 20), int(self.mag * 20))
-        t = RandAffined(keys=self.keys, prob=self.prob, translate_range=translation, mode='nearest')
+        t = RandAffined(keys=self.keys, prob=self.prob, translate_range=translation, mode=self.mode)
         return t(data)
 
 
@@ -45,14 +46,14 @@ class Rotate3D(BaseTransform):
 
     def transform(self, data):
         rotate_range = (int(self.mag * 60), int(self.mag * 60))
-        t = RandAffined(keys=self.keys, prob=self.prob, rotate_range=rotate_range, mode='nearest')
+        t = RandAffined(keys=self.keys, prob=self.prob, rotate_range=rotate_range, mode=self.mode)
         return t(data)
 
 
 class Scale3D(BaseTransform):
     def transform(self, data):
         scale = (self.mag * 0.5, self.mag)
-        t = RandAffined(keys=self.keys, prob=self.prob, scale_range=scale, mode='nearest')
+        t = RandAffined(keys=self.keys, prob=self.prob, scale_range=scale, mode=self.mode)
         return t(data)
 #
 #

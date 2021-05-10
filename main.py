@@ -21,17 +21,17 @@ import os
 def _create_loss():
     # Create loss criterion
     if cfg.loss_name == "Dice":
-        return DiceLoss(to_onehot_y=False, squared_pred=True, softmax=True, include_background=False)
+        return DiceLoss(to_onehot_y=False, squared_pred=True, softmax=True, include_background=cfg.include_background)
     if cfg.loss_name == "DiceCE":
-        return DiceCELoss(to_onehot_y=False, squared_pred=True, softmax=True, include_background=False, sigmoid=False)
+        return DiceCELoss(to_onehot_y=False, squared_pred=True, softmax=True, include_background=cfg.include_background)
 
 
-def _create_optimizer():
+def _create_optimizer(model):
     # Create loss criterion
     if cfg.optimizer_name == "Adam":
-        return Adam(model.parameters(), lr=cfg.initial_lr, weight_decay=cfg.weight_decay, amsgrad=True)
+        return Adam(model.parameters(), lr=cfg.initial_lr, weight_decay=cfg.weight_decay, amsgrad=cfg.amsgrad)
     if cfg.optimizer_name == "SGD":
-        return SGD(model.parameters(), lr=cfg.initial_lr, nesterov=True, momentum=cfg.momentum)
+        return SGD(model.parameters(), lr=cfg.initial_lr, nesterov=cfg.nesterov, momentum=cfg.momentum)
 
 
 def _create_scheduler(optimizer):
@@ -41,11 +41,10 @@ def _create_scheduler(optimizer):
 
 def _create_eval():
     if cfg.eval_name == "DiceMetric":
-        return DiceMetric(include_background=False)
+        return DiceMetric(include_background=cfg.include_background)
 
 
 if __name__ == '__main__':
-
     # Load and log experiment configuration
     logger = get_logger(cfg.log_path)
     logger.info(cfg.id)
@@ -89,7 +88,7 @@ if __name__ == '__main__':
     logger.info(eval_criterion)
 
     # Create the optimizer
-    optimizer = _create_optimizer()
+    optimizer = _create_optimizer(model)
     logger.info(optimizer)
 
     # create scheduler
@@ -109,3 +108,5 @@ if __name__ == '__main__':
 
     # Start training
     trainer.train(train_loader, eval_loader)
+
+
