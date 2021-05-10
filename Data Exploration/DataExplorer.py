@@ -3,13 +3,16 @@ import matplotlib.pyplot as plt
 import torchvision
 from DataLoader.BasicTransformations import *
 from utils.utils import split_image
-from DataLoader.CustomDataSet import CustomDataset, LoadData
+from DataLoader.CustomDataSet import CustomDataset
 from torchvision import transforms, datasets
-from DataLoader.GeometricTransformations import *
+# from DataLoader.GeometricTransformations import *
+from monai.transforms import Orientationd, RandSpatialCropd, ToTensord, Compose
+from torch.utils.data import DataLoader, random_split
 
 
 def show_image(image, name=None):
     """display 3d image with shape of (128,128,128)"""
+    image = torch.squeeze(image)
     fig = plt.figure()
     if name is not None:
         plt.title(name)
@@ -45,31 +48,22 @@ def histogram_image(image):
 
 
 if __name__ == '__main__':
-    # set all needed transformation
-    # dir = r"/tcmldrive/databases/Public/MICA BRaTS2018/Training/HGG/Brats18_2013_2_1"
-    # load = LoadData()
-    # data, seg = load(file_dir=dir)
+    image = r"C:\Users\User\Documents\FinalProject\MICCAI_BraTS2020\MICCAI_BraTS2020_TrainingData\BraTS20_Training_001"
+    # load = LoadData((240, 240, 155))
+    # data = load(file_dir=image)
 
-    # dir = r'C:\Users\User\Documents\FinalProject\MICCAI_BraTS2020\MICCAI_BraTS2020_TrainingData'
-    loader_path = '/tcmldrive/shared/BraTS2020 Training/'
+    loader_path = r'C:\Users\User\Documents\FinalProject\MICCAI_BraTS2020\MICCAI_BraTS2020_TrainingData'
+    # loader_path = '/tcmldrive/shared/BraTS2020 Training/'
 
-    # transform_train = (RandomFlip(1,0.7),TranslateXYZ(1,0.7), Rotate(1,0.1), RandomElasticDeformation(1,0.1))
-    # transform_target = (Rotate(1,0.5),)
-    dataset = CustomDataset(data_dir=loader_path, transforms=())
-    # dataset = CustomDataset(data_dir=dir, data_exploration=True)
+    dataset = CustomDataset(data_dir=loader_path, transform=train_transforms)
 
-    data, seg = dataset.__getitem__(17)
+    data = dataset.__getitem__(95)
 
-    mri1, mri2, mri3, mri4 = torch.chunk(data, dim=0, chunks=4)
+    mri1, mri2, mri3, mri4 = torch.chunk(data['image'], dim=0, chunks=4)
 
-    show_image(torch.squeeze(mri1))
-    # show_image(torch.squeeze(mri2))
-    # show_image(torch.squeeze(mri3))
-    # show_image(torch.squeeze(mri4))
+    show_image(mri1)
+    show_image(mri2)
+    show_image(mri3)
+    show_image(mri4)
 
-    _, ch1, ch2, ch4 = torch.chunk(seg, dim=0, chunks=4)
-
-    # show_image(torch.squeeze(ch1), "ch1")
-    show_image(torch.squeeze(ch2), "ch2")
-    # show_image(torch.squeeze(ch4), "ch4")
-
+    show_image((data['seg']), "seg")

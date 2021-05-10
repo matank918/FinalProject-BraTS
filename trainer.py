@@ -4,6 +4,9 @@ from torch.utils.tensorboard import SummaryWriter
 from utils.utils import RunningAverage, split_image
 import os
 import time
+from torch.optim.lr_scheduler import ReduceLROnPlateau
+from monai.transforms import Activations, AsDiscrete, Compose
+from monai.networks.utils import one_hot
 
 
 class UNet3DTrainer:
@@ -24,12 +27,14 @@ class UNet3DTrainer:
     """
 
     def __init__(self, model, logger, optimizer, loss_criterion, lr_scheduler,
-                 eval_criterion, device, best_eval_score,
+                 eval_criterion, device, best_eval_score, log_after_iter, validate_after_iter,
                  max_num_epochs, accumulation_steps, checkpoint_dir=None):
 
         self.logger = logger
         self.writer = SummaryWriter()
         self.model = model
+        self.log_after_iter = log_after_iter
+        self.validate_after_iter = validate_after_iter
         self.optimizer = optimizer
         self.scheduler = lr_scheduler
         self.accumulation_steps = accumulation_steps
@@ -38,7 +43,9 @@ class UNet3DTrainer:
         self.device = device
         self.checkpoint_dir = checkpoint_dir
         self.max_num_epochs = max_num_epochs
-
+        self.activation = Compose([
+            Activations(softmax=True), AsDiscrete(argmax=True, to_onehot=True, n_classes=4)
+        ])
         self.logger.info(model)
 
         if best_eval_score is not None:
@@ -53,13 +60,11 @@ class UNet3DTrainer:
             train_eval_scores = RunningAverage()
             epoch_time = time.time()
 
-
             # sets the model in training mode
             self.model.train()
             for i, batch in enumerate(trainloaders, start=1):
 
                 iter_time = time.time()
-
                 input, target = self._split_batch(batch)
 
                 print(f'Training iteration [{i}/{len(trainloaders)}]. '
@@ -68,53 +73,54 @@ class UNet3DTrainer:
                 # get output from the net, calculate the loss
                 output, loss = self._forward_pass(input, target)
                 train_losses.update(loss.item(), self._batch_size(input))
-
                 # compute eval criterion for training set
                 eval_score = self.eval_criterion(output, target)
-                train_eval_scores.update(eval_score.item(), self._batch_size(input))
+                # train_eval_scores.update(eval_score.item(), self._batch_size(input))
+                train_eval_scores.update(eval_score[0].item(), self._batch_size(input))
 
                 loss = loss / self.accumulation_steps
+                # self.optimizer.zero_grad()
                 loss.backward()
+                # self.optimizer.step()
 
                 # compute gradients and update parameters
+                global_step = num_epoch * len(trainloaders) + i
                 if i % self.accumulation_steps == 0:
                     self.optimizer.step()
                     self.optimizer.zero_grad()
+                    if self.scheduler is not None:
+                        # adjust learning rate if necessary
+                        self.scheduler.step()
+                        # log current learning rate in tensorboard
+                        self._log_lr(global_step)
+
+                if i % self.log_after_iter == 0:
+                    # log stats, params and images
+                    self.logger.info(
+                        f'Training stats. Loss: {round(train_losses.avg, 2)}.'
+                        f'Evaluation score: {round(train_eval_scores.avg, 2)}'
+                    )
+
+                    self._log_stats(global_step, 'train', train_losses.avg, train_eval_scores.avg)
+                    self._log_params(global_step)
+                    # self._log_images(input, global_step, target, output, 'train_')
+
+                if i % self.validate_after_iter == 0 and evalloader is not None:
+                    self.model.eval()
+                    # evaluate on validation set
+                    val_losses, eval_score = self.validate(evalloader)
+                    self._log_stats(global_step, 'val', val_losses, eval_score)
+
+                    # set the model back to training mode
+                    self.model.train()
+
+                    # remember best validation metric
+                    is_best = self._is_best_eval_score(eval_score)
+                    if is_best:
+                        self._save_checkpoint(num_epoch)
 
                 iter_time = time.time() - iter_time
-                # self.logger.info(f"Iter {i} duration is {(round(iter_time, 2))} seconds")
-
-            # evaluate after each epoch
-            global_step = num_epoch * len(trainloaders)
-            if evalloader is not None:
-                self.model.eval()
-                # evaluate on validation set
-                val_losses, eval_score = self.validate(evalloader)
-                self._log_stats(global_step, 'val', val_losses, eval_score)
-
-                # set the model back to training mode
-                self.model.train()
-
-                # remember best validation metric
-                is_best = self._is_best_eval_score(eval_score)
-                if is_best:
-                    pass
-                    # self._save_checkpoint(num_epoch)
-
-                # adjust learning rate if necessary
-                if self.scheduler is not None:
-                    global_step = num_epoch * len(trainloaders)
-                    self.scheduler.step(val_losses)
-                    # log current learning rate in tensorboard
-                    self._log_lr(global_step)
-
-            self.logger.info(
-                f'Training stats. Loss: {train_losses.avg}. Evaluation score: {train_eval_scores.avg}')
-
-            self._log_stats(global_step, 'train', train_losses.avg, train_eval_scores.avg)
-            self._log_params(global_step)
-            # log stats, params and images
-            # self._log_images(input, global_step, target, output, 'train_')
+                self.logger.info(f"Iter {i} duration is {(round(iter_time, 2))} seconds")
 
             epoch_time = time.time() - epoch_time
             self.logger.info(f"epoch {num_epoch} duration is {(round(epoch_time / 60, 2))} minutes")
@@ -136,28 +142,38 @@ class UNet3DTrainer:
                 val_losses.update(loss.item(), self._batch_size(input))
 
                 eval_score = self.eval_criterion(output, target)
-                val_scores.update(eval_score.item(), self._batch_size(input))
+                val_scores.update(eval_score[0].item(), self._batch_size(input))
 
-            self.logger.info(f'Validation finished. Loss: {val_losses.avg}. Evaluation score: {val_scores.avg}')
+            self.logger.info(f'Validation finished. Loss: {round(val_losses.avg, 2)}. '
+                             f'Evaluation score: {round(val_scores.avg, 2)}')
             return val_losses.avg, val_scores.avg
 
     def _split_batch(self, batch):
         # splits between input and target
-        input, target = batch
+        input = batch['image']
+        target = batch['seg']
         input = input.to(self.device)
         target = target.to(self.device)
+        num_c = input.shape[1]
+        target = one_hot(target, num_c)
+
         return input, target
 
     def _forward_pass(self, input, target):
-        output = self.model(input)
-        fin_output = output[-1]
-        # compute the loss
-        loss = self.loss_criterion(fin_output, target)
-        if self.model.training:
-            for layer_output in output[:-1]:
-                loss += self.loss_criterion(layer_output, target)
 
-        output = output[-1]
+        output = self.model(input)
+        if isinstance(output, list):
+            fin_output = output[-1]
+            loss = self.loss_criterion(fin_output, target)
+            if self.model.training:
+                for layer_output in output[:-1]:
+                    loss += self.loss_criterion(layer_output, target)
+
+            output = output[-1]
+        else:
+            loss = self.loss_criterion(output, target)
+
+        output = self.activation(output)
 
         return output, loss
 
@@ -165,7 +181,7 @@ class UNet3DTrainer:
         is_best = eval_score > self.best_eval_score
 
         if is_best:
-            self.logger.info(f'Saving new best evaluation metric: {eval_score}')
+            self.logger.info(f'Saving new best evaluation metric: {round(eval_score.avg, 2)}')
             self.best_eval_score = eval_score
 
         return is_best
@@ -185,14 +201,11 @@ class UNet3DTrainer:
                      'max_num_epochs': self.max_num_epochs,
                      }
 
-            if not os.path.exists(self.checkpoint_dir):
-                self.logger.info(
-                    f"Checkpoint directory does not exists. Creating {self.checkpoint_dir}")
-                os.mkdir(self.checkpoint_dir)
+            if not os.path.exists('./runs'):
+                os.mkdir('./runs')
 
-            last_file_path = os.path.join(self.checkpoint_dir, 'last_checkpoint.pytorch')
-            self.logger(f"Saving last checkpoint to '{last_file_path}'")
-            torch.save(state, last_file_path)
+            self.logger(f"Saving last checkpoint to '{self.checkpoint_dir}'")
+            torch.save(state, self.checkpoint_dir)
 
     def _log_lr(self, global_step):
         lr = self.optimizer.param_groups[0]['lr']

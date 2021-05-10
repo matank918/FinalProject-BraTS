@@ -7,45 +7,46 @@ Created on Wed May 27 17:19:37 2020
 
 # general
 log_path = r'./runs'
-id = 10000
-run_name = "Dry runs"
-run_purpose = ""
+id = 1
+run_name = "new baseline ??? - monai"
+run_purpose = "trying to establish new baseline with monai"
 
 # model
-model_name = 'UNet3D'
-module_name = 'nnUnet.BuildingBlocks'
-basic_block = 'DoubleConv'
-in_channels = 4
-out_channels = 4
-f_maps = [32, 64, 128, 256, 320, 320]
-apply_pooling = False
+# model_name = 'UNet3D'
+# module_name = 'nnUnet.BuildingBlocks'
+# # basic_block = 'BatchDoubleConv'
+# basic_block = 'DoubleConv'
+# in_channels = 4
+# out_channels = 4
+# f_maps = [32, 64, 128, 256, 320, 320]
+# apply_pooling = False
 
 # loss and eval
-loss_name = 'DiceLoss'
+loss_name = 'DiceCE'
 # loss_name = 'BCEDiceLoss'
 # loss_name = 'GeneralizedDiceLoss'
 eval_name = 'DiceMetric'
 
 # loader
-# loader_path = r'C:\Users\User\Documents\FinalProject\MICCAI_BraTS2020\MICCAI_BraTS2020_TrainingData'
-loader_path = '/tcmldrive/shared/BraTS2020 Training/'
+loader_path = r'C:\Users\User\Documents\FinalProject\MICCAI_BraTS2020\MICCAI_BraTS2020_TrainingData'
+# loader_path = '/tcmldrive/shared/BraTS2020 Training/'
 val_percent = 0.1
-batch_size = 2
+batch_size = 1
+accumulation_steps = 2
 
 # optimizer
-deep_supervision = 3
-initial_lr = 0.005
-accumulation_steps = 1
-lr_scheduler_patience = 30
-lr_scheduler_eps = 1e-3
+optimizer_name = "Adam"
+deep_supervision = 0
+initial_lr = 3e-4
+momentum = 0.99
 weight_decay = 3e-5
 # train
-max_num_epochs = 15
-
-best_eval_score = 0.65
-
+max_num_epochs = 10
+best_eval_score = 0.7
+validate_after_iter = 50
+log_after_iter = 50
 # architecture
-kernel_size = (3, 3, 3)
-padding = (1, 1, 1)
-stride = (2, 2, 2)
-output_padding = (1, 1, 1)
+# kernel_size = (3, 3, 3)
+# padding = (1, 1, 1)
+# stride = (2, 2, 2)
+# output_padding = (1, 1, 1)

@@ -7,6 +7,7 @@ from utils.utils import get_number_of_learnable_parameters, softmax_helper
 import copy
 import importlib
 from nnUnet.initialization import InitWeights_He
+from monai.networks.nets import UNet
 
 
 class UNet3D(nn.Module):
@@ -83,14 +84,13 @@ class UNet3D(nn.Module):
                 if (D, W, H) != input_dim:
                     encoders_feat = nn.functional.interpolate(encoders_feat, size=input_dim, mode='trilinear',
                                                               align_corners=True)
-
                 decoders_features.append(encoders_feat)
 
         return decoders_features
 
 
 if __name__ == '__main__':
-    torch.cuda.empty_cache()
+    # torch.cuda.empty_cache()
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     f_maps = [32, 64, 128, 256, 320, 320]
     model = UNet3D(4, 4, f_maps, apply_pooling=False, basic_module=DoubleConv, deep_supervision=3)
@@ -98,4 +98,13 @@ if __name__ == '__main__':
     # x = model.training
     rand_image = torch.rand(2, 4, 128, 128, 128).to(device)
     # print(get_number_of_learnable_parameters(model))
+    model.to(device)
     out = model(rand_image)
+
+
+    # Create the model
+    # module = importlib.import_module(cfg.module_name)
+    # basic_block = getattr(module, cfg.basic_block)
+    # model = UNet3D(in_channels=cfg.in_channels, out_channels=cfg.out_channels, f_maps=cfg.f_maps,
+    #               apply_pooling=cfg.apply_pooling
+    #               ,basic_module=basic_block, deep_supervision=cfg.deep_supervision)

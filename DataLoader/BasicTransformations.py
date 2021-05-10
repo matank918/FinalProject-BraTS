@@ -4,79 +4,48 @@ import numpy as np
 from torchvision import transforms
 import torch.nn as nn
 import nibabel as nib
+from collections.abc import Iterable
+from typing import Any, List, Optional, Sequence, Tuple, Union
 
 from PIL import Image, ImageOps, ImageEnhance
+import concurrent.futures
+from monai.transforms import Orientationd, RandSpatialCropd, ToTensord, Compose, Randomizable, Transform, \
+    apply_transform, NormalizeIntensityd, RandFlipd
+from DataLoader.CustomTransformation import RandGaussianNoise3D, TranslateXYZ, Rotate3D, Scale3D
 
 
 class LoadData(object):
 
-    def __init__(self, dim):
+    def __init__(self, seg_dim):
         self.values = np.array([0, 1, 2, 4])
-        self.one_hot = np.zeros((len(self.values),) + dim)
+        self.seg_dim = seg_dim
 
-    def __call__(self, file_dir, with_names=False):
+    def __call__(self, file_dir):
+
         images = []
-        images_names = []
-        self.files_list = [os.path.join(file_dir, dI) for dI in os.listdir(file_dir)]
-        for file in self.files_list:
+        files_list = [os.path.join(file_dir, dI) for dI in os.listdir(file_dir)]
+        for file in files_list:
             if 'seg' in file:
                 seg = nib.load(file).get_fdata()
             else:
-                images_names.append(file[-12:-7])
                 image = (nib.load(file).get_fdata())
                 images.append(image)
-
         images = np.stack(images, axis=0)
-
-        if with_names:
-            return images, self.OneHot(seg), images_names
-        else:
-            return images, self.OneHot(seg)
-
-    def OneHot(self, seg):
-        for i, value in enumerate(self.values):
-            self.one_hot[i] = (seg == value).astype(int)
-        return self.one_hot
+        seg = np.expand_dims(seg, axis=0).astype('float32')
+        seg = np.where(seg == 4, 3, seg)
+        return {"image": images, "seg": seg}
 
 
-class ToTensor(object):
-    def __call__(self, img, seg):
-        return torch.tensor(img, dtype=torch.float32), torch.tensor(seg, dtype=torch.float32)
-
-
-class RandomCrop3D(object):
-    def __init__(self, img_dim, crop_dim):
-        h, w, d = img_dim
-        assert (h, w, d) > crop_dim
-        self.img_dim = tuple((h, w, d))
-        self.crop_dim = tuple(crop_dim)
-
-    def __call__(self, data, label):
-        assert data.shape[1:] == label.shape[1:]
-        slice_hwd = [self._get_slice(i, k) for i, k in zip(self.img_dim, self.crop_dim)]
-        return self._crop(data, *slice_hwd), self._crop(label, *slice_hwd)
-
-    @staticmethod
-    def _get_slice(img_dim, crop_dim):
-        try:
-            lower_bound = torch.randint(img_dim - crop_dim, (1,)).item()
-            return lower_bound, lower_bound + crop_dim
-        except:
-            return (None, None)
-
-    @staticmethod
-    def _crop(x, slice_h, slice_w, slice_d):
-        return x[:, slice_h[0]:slice_h[1], slice_w[0]:slice_w[1], slice_d[0]:slice_d[1]]
-
-
-class CustomNormalize(object):
-
-    def __call__(self, x):
-        for i in range(x.shape[0]):
-            non_zero_vox = x[i][x[i].nonzero(as_tuple=True)]
-            x[i][x[i].nonzero(as_tuple=True)] = \
-                ((x[i][x[i].nonzero(as_tuple=True)] - torch.mean(non_zero_vox)) / torch.std(non_zero_vox))
-
-        return x
-
-
+train_transforms = Compose([
+    LoadData((240, 240, 155)),
+    RandSpatialCropd(
+        keys=["image", "seg"], roi_size=[128, 128, 128], random_size=False
+    ),
+    NormalizeIntensityd(keys=["image"], nonzero=True, channel_wise=True),
+    RandFlipd(keys=["image", "seg"], prob=0.2),
+    # Rotate3D(keys=["image", "seg"], prob=1, mag=0),
+    # RandGaussianNoise3D(keys=["image"], prob=0, mag=0.1),
+    # TranslateXYZ(keys=["image", "seg"], prob=0, mag=1),
+    # Scale3D(keys=["image", "seg"], prob=1, mag=1),
+    ToTensord(keys=["image", "seg"])
+])

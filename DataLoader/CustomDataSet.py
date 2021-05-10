@@ -1,13 +1,15 @@
-import os
-import torch
-from torch.utils.data import Dataset
-import torchvision
-from DataLoader.BasicTransformations import *
-from DataLoader.GeometricTransformations import *
-import torchio as tio
-
 from torch.utils.data import DataLoader, random_split
 import numpy as np
+import collections.abc
+import time
+from typing import IO, TYPE_CHECKING, Any, Callable, Dict, List, Optional, Sequence, Union
+import torch
+from torch.utils.data import Dataset as _TorchDataset
+from torch.utils.data import Subset
+import os
+import nibabel as nib
+from monai.transforms import Orientationd, RandSpatialCropd, ToTensord, Compose, Randomizable, Transform, \
+    apply_transform, NormalizeIntensityd
 
 
 def get_loaders(dataset, val_percent, batch_size):
@@ -19,72 +21,52 @@ def get_loaders(dataset, val_percent, batch_size):
     return train_loader, val_loader
 
 
-class CustomDataset(Dataset):
-    def __init__(self, data_dir, transforms=(), data_transform=()):
+class CustomDataset(_TorchDataset):
 
-        self.dir = data_dir
-        self.training_dir = data_dir
-        self.training_data = []
-        self.folder_names = []
-        self.load_data = LoadData((240, 240, 155))
+    def __init__(self, data_dir: Sequence, transform: Optional[Callable] = None) -> None:
+        """
+        Args:
+            data: input data to load and transform to generate dataset for model.
+            transform: a callable data transform on input data.
 
-        self.transform = Compose([
-            ToTensor(),
-            # RandomFlip(0.2),
-            RandomCrop3D((240, 240, 155), (128, 128, 128)),
-            *transforms
-        ])
+        """
+        self.data = self._generate_data(data_dir)
+        self.transform = transform
 
-        self.data_transform = torchvision.transforms.Compose([
-            *data_transform,
-            CustomNormalize()
-            ])
-
-        self.get_folder_names()
-
-    def get_folder_names(self):
+    @staticmethod
+    def _generate_data(data_dir) -> list:
         """create a list of paths for each MRI image's folder"""
-        self.folder_names = [os.path.join(self.training_dir, dI) for dI in os.listdir(self.training_dir) if
-                             os.path.isdir(os.path.join(self.training_dir, dI))]
 
-    def __len__(self):
-        """:return (int): return length of the list "folder_names"""
-        return len(self.folder_names)
+        return [os.path.join(data_dir, dI) for dI in os.listdir(data_dir) if
+                os.path.isdir(os.path.join(data_dir, dI))]
 
-    def __getitem__(self, i):
-        data, seg = self.load_data(self.folder_names[i])
-        data, seg = self.transform(data, seg)
-        data = self.data_transform(data)
+    def __len__(self) -> int:
+        return len(self.data)
 
-        return data, seg
+    def _transform(self, index: int):
+        """
+        Fetch single data item from `self.data`.
+        """
+        item = self.data[index]
+        if not isinstance(self.transform, Compose):
+            raise ValueError("transform must be an instance of monai.transforms.Compose.")
 
+        for _transform in self.transform.transforms:
+            item = apply_transform(_transform, item)
+        return item
 
-class Compose(object):
-    """Composes several transforms together.
-    Args:
-        transforms (list of ``Transform`` objects): list of transforms to compose.
-    """
-
-    def __init__(self, transforms):
-        self.transforms = transforms
-
-    def __call__(self, img, seg):
-        for t in self.transforms:
-            img, seg = t(img, seg)
-        return img, seg
-
-    def __repr__(self):
-        format_string = self.__class__.__name__ + '('
-        for t in self.transforms:
-            format_string += '\n'
-            format_string += '    {0}'.format(t)
-        format_string += '\n)'
-        return format_string
+    def __getitem__(self, index: Union[int, slice, Sequence[int]]):
+        """
+        Returns a `Subset` if `index` is a slice or Sequence, a data item otherwise.
+        """
+        if isinstance(index, slice):
+            # dataset[:42]
+            start, stop, step = index.indices(len(self))
+            indices = range(start, stop, step)
+            return Subset(dataset=self, indices=indices)
+        if isinstance(index, collections.abc.Sequence):
+            # dataset[[1, 3, 4]]
+            return Subset(dataset=self, indices=index)
+        return self._transform(index)
 
 
-if __name__ == '__main__':
-    dir = r"/home/kachel/MICA BraTS2020/"
-    # transformations = transforms.Compose([ToTensor()])
-    Dataset = CustomDataset(dir)
-    print(Dataset.__len__())
-    data, label = Dataset.__getitem__(5)
