@@ -26,6 +26,7 @@ loss_name = 'DiceCE'
 # loss_name = 'BCEDiceLoss'
 # loss_name = 'GeneralizedDiceLoss'
 eval_name = 'DiceMetric'
+include_background = True
 
 # loader
 loader_path = r'C:\Users\User\Documents\FinalProject\MICCAI_BraTS2020\MICCAI_BraTS2020_TrainingData'
@@ -37,13 +38,12 @@ accumulation_steps = 2
 # optimizer
 optimizer_name = "Adam"
 deep_supervision = 0
-initial_lr = 3e-4
+initial_lr = 3e-3
 momentum = 0.99
 weight_decay = 3e-5
 nesterov = True
 amsgrad = True
 
-include_background = True
 # train
 max_num_epochs = 10
 best_eval_score = 0.7

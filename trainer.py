@@ -108,14 +108,14 @@ class UNet3DTrainer:
                 if i % self.validate_after_iter == 0 and evalloader is not None:
                     self.model.eval()
                     # evaluate on validation set
-                    val_losses, eval_score = self.validate(evalloader)
-                    self._log_stats(global_step, 'val', val_losses, eval_score)
+                    val_losses, val_score = self.validate(evalloader)
+                    self._log_stats(global_step, 'val', val_losses, val_score)
 
                     # set the model back to training mode
                     self.model.train()
 
                     # remember best validation metric
-                    is_best = self._is_best_eval_score(eval_score)
+                    is_best = self._is_best_eval_score(val_score)
                     if is_best:
                         self._save_checkpoint(num_epoch)
 
@@ -181,7 +181,7 @@ class UNet3DTrainer:
         is_best = eval_score > self.best_eval_score
 
         if is_best:
-            self.logger.info(f'Saving new best evaluation metric: {round(eval_score.avg, 2)}')
+            self.logger.info(f'Saving new best evaluation metric: {round(eval_score, 2)}')
             self.best_eval_score = eval_score
 
         return is_best

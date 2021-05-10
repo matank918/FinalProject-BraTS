@@ -35,7 +35,7 @@ def _create_optimizer(model):
 
 
 def _create_scheduler(optimizer):
-    lambda1 = lambda epoch: 0.99 ** epoch
+    lambda1 = lambda epoch: 0.999 ** epoch
     return LambdaLR(optimizer, lr_lambda=lambda1)
 
 
