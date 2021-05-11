@@ -102,9 +102,3 @@ if __name__ == '__main__':
     out = model(rand_image)
 
 
-    # Create the model
-    # module = importlib.import_module(cfg.module_name)
-    # basic_block = getattr(module, cfg.basic_block)
-    # model = UNet3D(in_channels=cfg.in_channels, out_channels=cfg.out_channels, f_maps=cfg.f_maps,
-    #               apply_pooling=cfg.apply_pooling
-    #               ,basic_module=basic_block, deep_supervision=cfg.deep_supervision)

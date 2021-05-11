@@ -14,7 +14,7 @@ from utils.Log import get_logger, get_module_variable
 from utils.utils import *
 
 from trainer import UNet3DTrainer
-from DataLoader.CustomDataSet import *
+from DataLoader.CustomDataset import *
 from Loss.loss import create_loss
 from Loss.metrics import create_eval
 from pathlib import Path

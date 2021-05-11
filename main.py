@@ -2,28 +2,57 @@ import importlib
 import torch
 import torch.nn as nn
 from torch.optim import Adam, SGD
-from torch.optim.lr_scheduler import *
+from torch.optim.lr_scheduler import LambdaLR
 from utils.utils import get_number_of_learnable_parameters
 from utils.Log import get_logger, get_module_variable, get_checkpoint_dir
-from trainer import UNet3DTrainer
-from DataLoader.CustomDataSet import CustomDataset, get_loaders
-# from Loss.metrics import create_eval
+from DataLoader.CustomDataset import CustomDataset
 import utils.config as cfg
-# from Loss.loss import *
-from nnUnet.nnUnet3d import *
 from monai.losses import DiceLoss, DiceCELoss
 from monai.metrics import DiceMetric
 from DataLoader.BasicTransformations import train_transforms
 from monai.networks.layers.factories import Act, Norm
-import os
+from monai.networks.nets import UNet
+from trainer import UNet3DTrainer
+from torch.utils.data import DataLoader, random_split
+from nnUnet.nnUnet3d import UNet3D
+
+
+def _get_loaders(dataset, val_percent, batch_size):
+    n_val = int(len(dataset) * val_percent)
+    n_train = len(dataset) - n_val
+    train, val = random_split(dataset, [n_train, n_val])
+    train_loader = DataLoader(train, batch_size=batch_size, shuffle=True, num_workers=8, pin_memory=True)
+    val_loader = DataLoader(val, batch_size=batch_size, shuffle=False, num_workers=8, pin_memory=True, drop_last=True)
+    return train_loader, val_loader
+
+
+def _get_model():
+    if cfg.baseline_model:
+        return UNet(
+            dimensions=3,
+            in_channels=4,
+            out_channels=3,
+            channels=(32, 64, 128, 256, 320, 320),
+            strides=(2, 2, 2, 2, 2),
+            num_res_units=0,
+            act=Act.LEAKYRELU,
+            norm=Norm.BATCH)
+    else:
+        # Create the model
+        module = importlib.import_module(cfg.module_name)
+        basic_block = getattr(module, cfg.basic_block)
+        model = UNet3D(in_channels=cfg.in_channels, out_channels=cfg.out_channels, f_maps=cfg.f_maps,
+                       apply_pooling=cfg.apply_pooling
+                       , basic_module=basic_block, deep_supervision=cfg.deep_supervision)
+    return model
 
 
 def _create_loss():
     # Create loss criterion
     if cfg.loss_name == "Dice":
-        return DiceLoss(to_onehot_y=False, squared_pred=True, softmax=True, include_background=cfg.include_background)
+        return DiceLoss(to_onehot_y=False, squared_pred=True, softmax=True, include_background=True)
     if cfg.loss_name == "DiceCE":
-        return DiceCELoss(to_onehot_y=False, squared_pred=True, softmax=True, include_background=cfg.include_background)
+        return DiceCELoss(to_onehot_y=False, squared_pred=True, softmax=True, include_background=True)
 
 
 def _create_optimizer(model):
@@ -35,13 +64,13 @@ def _create_optimizer(model):
 
 
 def _create_scheduler(optimizer):
-    lambda1 = lambda epoch: 0.999 ** epoch
+    lambda1 = lambda iter: 0.999 ** iter
     return LambdaLR(optimizer, lr_lambda=lambda1)
 
 
 def _create_eval():
     if cfg.eval_name == "DiceMetric":
-        return DiceMetric(include_background=cfg.include_background)
+        return DiceMetric(include_background=True)
 
 
 if __name__ == '__main__':
@@ -54,17 +83,10 @@ if __name__ == '__main__':
 
     # Create data loaders
     dataset = CustomDataset(cfg.loader_path, transform=train_transforms)
-    train_loader, eval_loader = get_loaders(dataset, cfg.val_percent, cfg.batch_size)
+    train_loader, eval_loader = _get_loaders(dataset, val_percent=cfg.val_percent, batch_size=2)
 
-    model = UNet(
-        dimensions=3,
-        in_channels=4,
-        out_channels=4,
-        channels=(32, 64, 128, 256, 320, 320),
-        strides=(2, 2, 2, 2, 2),
-        num_res_units=0,
-        act=Act.LEAKYRELU,
-        norm=Norm.BATCH)
+    # set model
+    model = _get_model()
 
     # use DataParallel if more than 1 GPU available
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -108,5 +130,3 @@ if __name__ == '__main__':
 
     # Start training
     trainer.train(train_loader, eval_loader)
-
-

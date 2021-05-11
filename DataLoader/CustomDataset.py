@@ -1,4 +1,3 @@
-from torch.utils.data import DataLoader, random_split
 import numpy as np
 import collections.abc
 import time
@@ -10,15 +9,7 @@ import os
 import nibabel as nib
 from monai.transforms import Orientationd, RandSpatialCropd, ToTensord, Compose, Randomizable, Transform, \
     apply_transform, NormalizeIntensityd
-
-
-def get_loaders(dataset, val_percent, batch_size):
-    n_val = int(len(dataset) * val_percent)
-    n_train = len(dataset) - n_val
-    train, val = random_split(dataset, [n_train, n_val])
-    train_loader = DataLoader(train, batch_size=batch_size, shuffle=True, num_workers=8, pin_memory=True)
-    val_loader = DataLoader(val, batch_size=batch_size, shuffle=False, num_workers=8, pin_memory=True, drop_last=True)
-    return train_loader, val_loader
+import glob
 
 
 class CustomDataset(_TorchDataset):
@@ -47,7 +38,8 @@ class CustomDataset(_TorchDataset):
         """
         Fetch single data item from `self.data`.
         """
-        item = self.data[index]
+        item = self._create_dict(self.data[index])
+        # item = self.data[index]
         if not isinstance(self.transform, Compose):
             raise ValueError("transform must be an instance of monai.transforms.Compose.")
 
@@ -68,5 +60,20 @@ class CustomDataset(_TorchDataset):
             # dataset[[1, 3, 4]]
             return Subset(dataset=self, indices=index)
         return self._transform(index)
+
+    @staticmethod
+    def _create_dict(path):
+        data_dict = {}
+        image_list = []
+        for root, _, files in os.walk(path):
+            for name in files:
+                if 'seg' in name:
+                    data_dict["seg"] = os.path.join(root, name)
+                else:
+                    image_list.append(os.path.join(root, name))
+
+        data_dict["image"] = sorted(image_list)
+
+        return data_dict
 
 
