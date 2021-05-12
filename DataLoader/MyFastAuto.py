@@ -106,7 +106,6 @@ class FastAutoAugment:
                          for transform, prob, mag in sampled]
 
             subpolicy = Compose([
-                LoadData((240, 240, 155)),
                 RandSpatialCropd(
                     keys=["image", "seg"], roi_size=[128, 128, 128], random_size=False
                 ),
@@ -135,7 +134,6 @@ class FastAutoAugment:
             subpolicy = [transform_candidates[vals['transform1'][0]](vals['prob1'][0], vals['mag1'][0]),
                          transform_candidates[vals['transform2'][0]](vals['prob2'][0], vals['mag2'][0])]
             subpolicy = Compose([
-                LoadData((240, 240, 155)),
                 RandSpatialCropd(keys=["image", "seg"], roi_size=[128, 128, 128], random_size=False),
                 NormalizeIntensityd(keys="image", nonzero=True, channel_wise=True),
                 *subpolicy,

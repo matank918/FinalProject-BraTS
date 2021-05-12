@@ -12,7 +12,7 @@ run_name = "new baseline ???"
 run_purpose = "trying to establish new baseline"
 
 # model
-baseline_model = True
+baseline_model = "1"
 model_name = 'UNet3D'
 module_name = 'nnUnet.BuildingBlocks'
 # basic_block = 'BatchDoubleConv'
@@ -22,11 +22,10 @@ out_channels = 3
 f_maps = [32, 64, 128, 256, 320, 320]
 apply_pooling = False
 
-# loss and eval
+# loss
 loss_name = 'DiceCE'
 # loss_name = 'Dice'
 # loss_name = 'GeneralizedDiceLoss'
-eval_name = 'DiceMetric'
 
 # loader
 loader_path = r'C:\Users\User\Documents\FinalProject\MICCAI_BraTS2020\MICCAI_BraTS2020_TrainingData'
@@ -38,7 +37,7 @@ accumulation_steps = 1
 # optimizer
 optimizer_name = "Adam"
 deep_supervision = 0
-initial_lr = 3e-4
+initial_lr = 1e-3
 momentum = 0.99
 weight_decay = 3e-5
 nesterov = True

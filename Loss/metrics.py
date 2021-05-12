@@ -16,7 +16,7 @@ class _AbstractDiceMetric(nn.Module):
         per_channel_dice = self.dice(input, target)
 
         # average Dice score across all channels/classes
-        return torch.mean(per_channel_dice)
+        return per_channel_dice
 
 
 class DiceMetric(_AbstractDiceMetric):
@@ -46,3 +46,12 @@ class DiceMetric(_AbstractDiceMetric):
 def create_eval(name):
     if name == 'DiceMetric':
         return DiceMetric()
+
+
+if __name__ == '__main__':
+    loss =DiceMetric()
+    rand_image1 = torch.rand((2,3,128,128,128))
+    rand_image2 = torch.rand((2,3,128,128,128))
+    c = loss(rand_image1, rand_image2)
+    d = c[0]
+

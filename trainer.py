@@ -43,9 +43,6 @@ class UNet3DTrainer:
         self.device = device
         self.checkpoint_dir = checkpoint_dir
         self.max_num_epochs = max_num_epochs
-        self.activation = Compose([
-            Activations(sigmoid=True), AsDiscrete(threshold_values=True)
-        ])
         self.logger.info(model)
 
         if best_eval_score is not None:
@@ -69,12 +66,11 @@ class UNet3DTrainer:
 
                 # get output from the net, calculate the loss
                 output, loss = self._forward_pass(input, target)
-                train_losses.update(loss.item(), self._batch_size(input))
+                train_losses.update(loss.item())
 
                 # compute eval criterion for training set
                 value, not_nans = self.eval_criterion(output, target)
-                not_nans = not_nans.item()
-                train_eval_scores.update(value.item(), not_nans)
+                train_eval_scores.update(torch.mean(value).item(), not_nans)
 
                 self.optimizer.zero_grad()
                 loss.backward()
@@ -97,8 +93,9 @@ class UNet3DTrainer:
                 if i % self.log_after_iter == 0:
                     # log stats, params and images
                     self.logger.info(
-                        f'Average Training stats. Loss: {train_losses.avg:.4f}.'
-                        f'Average Training Evaluation score: {train_eval_scores.avg:.4f}'
+                        f'Average Training stats:'
+                        f' Loss: {train_losses.avg:.4f}. '
+                        f' Evaluation score: {train_eval_scores.avg:.4f}. '
                     )
 
                     self._log_stats(global_step, 'train', train_losses.avg, train_eval_scores.avg)
@@ -144,24 +141,24 @@ class UNet3DTrainer:
                 input, target = self._split_batch(batch)
 
                 output, loss = self._forward_pass(input, target)
-                val_losses.update(loss.item(), self._batch_size(input))
+                val_losses.update(loss.item())
 
                 # compute overall mean dice
-                value, not_nans = self.eval_criterion(output, target)
+                value, not_nans = self.eval_criterion(y_pred=output, y=target)
                 not_nans = not_nans.item()
                 val_scores.update(value.item(), not_nans)
                 # compute mean dice for TC
-                value, not_nans = self.eval_criterion(output[:, 0:1], target[:, 0:1])
+                value_tc, not_nans = self.eval_criterion(y_pred=output[:, 0:1], y=target[:, 0:1])
                 not_nans = not_nans.item()
-                metric_values_tc.update(value.item(), not_nans)
+                metric_values_tc.update(value_tc.item(), not_nans)
                 # compute mean dice for WT
-                value, not_nans = self.eval_criterion(output[:, 1:2], target[:, 1:2])
+                value_wt, not_nans = self.eval_criterion(y_pred=output[:, 1:2], y=target[:, 1:2])
                 not_nans = not_nans.item()
-                metric_values_wt.update(value.item(), not_nans)
+                metric_values_wt.update(value_wt.item(), not_nans)
                 # compute mean dice for ET
-                value, not_nans = self.eval_criterion(output[:, 2:3], target[:, 2:3])
+                value_et, not_nans = self.eval_criterion(y_pred=output[:, 2:3], y=target[:, 2:3])
                 not_nans = not_nans.item()
-                metric_values_et.update(value.item(), not_nans)
+                metric_values_et.update(value_et.item(), not_nans)
 
             self.logger.info(
                 f"current loss: {val_losses.avg:.4f} "f" current mean dice: {val_scores.avg:.4f}"
@@ -179,6 +176,9 @@ class UNet3DTrainer:
         return input, target
 
     def _forward_pass(self, input, target):
+        post_trans = Compose([
+                Activations(sigmoid=False, softmax=True), AsDiscrete(threshold_values=True)
+            ])
 
         output = self.model(input)
         if isinstance(output, list):
@@ -191,9 +191,7 @@ class UNet3DTrainer:
             output = output[-1]
         else:
             loss = self.loss_criterion(output, target)
-
-        output = self.activation(output)
-
+        output = post_trans(output)
         return output, loss
 
     def _is_best_eval_score(self, eval_score):
