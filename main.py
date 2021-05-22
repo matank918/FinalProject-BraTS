@@ -18,6 +18,8 @@ from monai.losses import DiceLoss
 from monai.metrics import DiceMetric
 from monai.networks.nets import UNet
 import torch
+from monai.utils import set_determinism
+
 
 def _get_loaders(dataset, val_percent, batch_size):
     n_val = int(len(dataset) * val_percent)
@@ -31,18 +33,8 @@ def _get_loaders(dataset, val_percent, batch_size):
 
 
 def _get_model():
-    if cfg.baseline_model == "1":
-        return UNet(dimensions=3, in_channels=4, out_channels=3, channels=(32, 64, 128, 256, 320, 320),
-                    strides=(2, 2, 2, 2, 2), num_res_units=0, act=Act.LEAKYRELU, norm=Norm.BATCH)
-    elif cfg.baseline_model == "2":
-        return UNet(dimensions=3, in_channels=4, out_channels=3, channels=(16, 32, 64, 128, 256),
-            strides=(2, 2, 2, 2), num_res_units=2)
-    else:
-        # Create the model        module = importlib.import_module(cfg.module_name)
-        basic_block = getattr(module, cfg.basic_block)
-        return UNet3D(in_channels=cfg.in_channels, out_channels=cfg.out_channels, f_maps=cfg.f_maps,
-                      apply_pooling=cfg.apply_pooling
-                      ,basic_module=basic_block, deep_supervision=cfg.deep_supervision)
+        return UNet(dimensions=3, in_channels=cfg.in_channels, out_channels=cfg.out_channels, channels=cfg.f_maps,
+                    strides=(2, 2, 2, 2), num_res_units=0, act=Act.LEAKYRELU, norm=Norm.BATCH)
 
 
 def _create_loss():
@@ -71,6 +63,8 @@ def _create_eval():
 
 
 if __name__ == '__main__':
+    torch.manual_seed(0)
+    
     # Load and log experiment configuration
     logger = get_logger(cfg.log_path)
     logger.info(cfg.id)
@@ -120,9 +114,9 @@ if __name__ == '__main__':
 
     # Create model trainer
     trainer = UNet3DTrainer(model=model, logger=logger, optimizer=optimizer, loss_criterion=loss_criterion,
-                             lr_scheduler=None, device=device, eval_criterion=eval_criterion,
+                             lr_scheduler=optimizer, device=device, eval_criterion=eval_criterion,
                              checkpoint_dir=checkpoint_dir, best_eval_score=cfg.best_eval_score,
-                             max_num_epochs=cfg.max_num_epochs, accumulation_steps=cfg.accumulation_steps,
+                             max_num_epochs=cfg.max_num_epochs,
                              validate_after_iter=cfg.validate_after_iter, log_after_iter=cfg.log_after_iter)
 
     # Start training

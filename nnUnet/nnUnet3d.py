@@ -45,8 +45,7 @@ class UNet3D(nn.Module):
             out_feature_num = reversed_f_maps[i]
 
             decoder = Decoder(in_feature_num, out_feature_num, basic_module=basic_module)
-            output_activation = nn.Sequential(nn.Conv3d(out_feature_num, out_channels, kernel_size=(1, 1, 1)),
-                                              nn.Softmax(dim=1))
+            output_activation = nn.Sequential(nn.Conv3d(out_feature_num, out_channels, kernel_size=(1, 1, 1)))
             decoders.append(decoder)
             output_activation_layers.append(output_activation)
 

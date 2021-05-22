@@ -7,20 +7,14 @@ Created on Wed May 27 17:19:37 2020
 
 # general
 log_path = r'./runs'
-id = 1
+id = 2
 run_name = "new baseline ???"
-run_purpose = "trying to establish new baseline"
+run_purpose = "trying to compare between accumulation and batch size"
 
 # model
-baseline_model = "1"
-model_name = 'UNet3D'
-module_name = 'nnUnet.BuildingBlocks'
-# basic_block = 'BatchDoubleConv'
-basic_block = 'DoubleConv'
 in_channels = 4
-out_channels = 3
-f_maps = [32, 64, 128, 256, 320, 320]
-apply_pooling = False
+out_channels = 4
+f_maps = (32, 64, 128, 256, 320)
 
 # loss
 loss_name = 'DiceCE'
@@ -30,24 +24,23 @@ loss_name = 'DiceCE'
 # loader
 loader_path = r'C:\Users\User\Documents\FinalProject\MICCAI_BraTS2020\MICCAI_BraTS2020_TrainingData'
 # loader_path = '/tcmldrive/shared/BraTS2020 Training/'
-val_percent = 0.1
+val_percent = 0.2
 batch_size = 2
-accumulation_steps = 1
 
 # optimizer
 optimizer_name = "Adam"
-deep_supervision = 0
-initial_lr = 1e-3
+initial_lr = 3e-4
 momentum = 0.99
 weight_decay = 3e-5
 nesterov = True
 amsgrad = True
 
 # train
-max_num_epochs = 100
+max_num_epochs = 10
 best_eval_score = 0.7
-validate_after_iter = 50
-log_after_iter = 50
+validate_after_iter = 75
+log_after_iter = 75
+
 # architecture
 kernel_size = (3, 3, 3)
 padding = (1, 1, 1)

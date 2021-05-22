@@ -28,7 +28,7 @@ class UNet3DTrainer:
 
     def __init__(self, model, logger, optimizer, loss_criterion, lr_scheduler,
                  eval_criterion, device, best_eval_score, log_after_iter, validate_after_iter,
-                 max_num_epochs, accumulation_steps, checkpoint_dir=None):
+                 max_num_epochs, checkpoint_dir=None):
 
         self.logger = logger
         self.writer = SummaryWriter()
@@ -37,7 +37,6 @@ class UNet3DTrainer:
         self.validate_after_iter = validate_after_iter
         self.optimizer = optimizer
         self.scheduler = lr_scheduler
-        self.accumulation_steps = accumulation_steps
         self.loss_criterion = loss_criterion
         self.eval_criterion = eval_criterion
         self.device = device
@@ -69,8 +68,8 @@ class UNet3DTrainer:
                 train_losses.update(loss.item())
 
                 # compute eval criterion for training set
-                value, not_nans = self.eval_criterion(output, target)
-                train_eval_scores.update(torch.mean(value).item(), not_nans)
+                value, non_nans = self.eval_criterion(output[:, 1:4], target[:, 1:4])
+                train_eval_scores.update(torch.mean(value).item(), non_nans)
 
                 self.optimizer.zero_grad()
                 loss.backward()
@@ -78,9 +77,7 @@ class UNet3DTrainer:
 
                 # compute gradients and update parameters
                 global_step = num_epoch * len(trainloaders) + i
-                # if i % self.accumulation_steps == 0:
-                #     self.optimizer.step()
-                #     self.optimizer.zero_grad()
+
                 if self.scheduler is not None:
                     # adjust learning rate if necessary
                     self.scheduler.step()
@@ -98,7 +95,6 @@ class UNet3DTrainer:
                         f' Evaluation score: {train_eval_scores.avg:.4f}. '
                     )
 
-                    self._log_stats(global_step, 'train', train_losses.avg, train_eval_scores.avg)
                     self._log_params(global_step)
                     self._log_lr(global_step)
                     # self._log_images(input, global_step, target, output, 'train_')
@@ -107,8 +103,9 @@ class UNet3DTrainer:
                     self.model.eval()
 
                     # evaluate on validation set
-                    val_losses, val_score = self.validate(evalloader)
-                    self._log_stats(global_step, 'val', val_losses, val_score)
+                    val_losses, val_score, value_tc, value_wt, value_wt = self.validate(evalloader)
+                    self._log_stats(global_step, 'val', val_losses, val_score,
+                                    value_tc, value_wt, value_wt)
 
                     # set the model back to training mode
                     self.model.train()
@@ -144,28 +141,24 @@ class UNet3DTrainer:
                 val_losses.update(loss.item())
 
                 # compute overall mean dice
-                value, not_nans = self.eval_criterion(y_pred=output, y=target)
-                not_nans = not_nans.item()
-                val_scores.update(value.item(), not_nans)
+                value, non_nans = self.eval_criterion(y_pred=output[:, 1:4], y=target[:, 1:4])
+                val_scores.update(value.item(), non_nans)
                 # compute mean dice for TC
-                value_tc, not_nans = self.eval_criterion(y_pred=output[:, 0:1], y=target[:, 0:1])
-                not_nans = not_nans.item()
-                metric_values_tc.update(value_tc.item(), not_nans)
+                value_tc, non_nans = self.eval_criterion(y_pred=output[:, 1:2], y=target[:, 1:2])
+                metric_values_tc.update(value_tc.item(), non_nans)
                 # compute mean dice for WT
-                value_wt, not_nans = self.eval_criterion(y_pred=output[:, 1:2], y=target[:, 1:2])
-                not_nans = not_nans.item()
-                metric_values_wt.update(value_wt.item(), not_nans)
+                value_wt, non_nans = self.eval_criterion(y_pred=output[:, 2:3], y=target[:, 2:3])
+                metric_values_wt.update(value_wt.item(), non_nans)
                 # compute mean dice for ET
-                value_et, not_nans = self.eval_criterion(y_pred=output[:, 2:3], y=target[:, 2:3])
-                not_nans = not_nans.item()
-                metric_values_et.update(value_et.item(), not_nans)
+                value_et, non_nans = self.eval_criterion(y_pred=output[:, 3:4], y=target[:, 3:4])
+                metric_values_et.update(value_et.item(), non_nans)
 
             self.logger.info(
                 f"current loss: {val_losses.avg:.4f} "f" current mean dice: {val_scores.avg:.4f}"
                 f" tc: {metric_values_tc.avg:.4f} wt: {metric_values_wt.avg:.4f} et: {metric_values_et.avg:.4f}"
             )
 
-            return val_losses.avg, val_scores.avg
+            return val_losses.avg, val_scores.avg, metric_values_tc.avg, metric_values_wt.avg, metric_values_et.avg
 
     def _split_batch(self, batch):
         # splits between input and target
@@ -176,9 +169,6 @@ class UNet3DTrainer:
         return input, target
 
     def _forward_pass(self, input, target):
-        post_trans = Compose([
-                Activations(sigmoid=False, softmax=True), AsDiscrete(threshold_values=True)
-            ])
 
         output = self.model(input)
         if isinstance(output, list):
@@ -191,7 +181,13 @@ class UNet3DTrainer:
             output = output[-1]
         else:
             loss = self.loss_criterion(output, target)
+
+        post_trans = Compose([
+            Activations(sigmoid=False, softmax=True), AsDiscrete(threshold_values=True)
+        ])
+
         output = post_trans(output)
+
         return output, loss
 
     def _is_best_eval_score(self, eval_score):
@@ -228,10 +224,14 @@ class UNet3DTrainer:
         lr = self.optimizer.param_groups[0]['lr']
         self.writer.add_scalar('learning_rate', lr, global_step)
 
-    def _log_stats(self, global_step, phase, loss_avg, eval_score_avg):
+    def _log_stats(self, global_step, phase, loss_avg, eval_score_avg, eval_tc_avg, eval_wt_avg, eval_et_avg):
         tag_value = {
             f'{phase}_loss_avg': loss_avg,
-            f'{phase}_eval_score_avg': eval_score_avg
+            f'{phase}_eval_score_avg': eval_score_avg,
+            f'{phase}_eval_tc_avg': eval_tc_avg,
+            f'{phase}_eval_wt_avg': eval_wt_avg,
+            f'{phase}_eval_et_avg': eval_et_avg,
+
         }
 
         for tag, value in tag_value.items():
@@ -246,41 +246,34 @@ class UNet3DTrainer:
                 pass
 
     def _log_images(self, global_step, input, target, prediction, prefix):
-        if self._batch_size(input) == 1:
-            _, ch1, ch2, ch4 = torch.chunk(target, dim=1, chunks=4)
-            Sagittal_ch1, Coronal_ch1, Horizontal_ch1 = split_image(ch1)
-            Sagittal_ch2, Coronal_ch2, Horizontal_ch2 = split_image(ch2)
-            Sagittal_ch4, Coronal_ch4, Horizontal_ch4 = split_image(ch4)
+        _, ch1, ch2, ch4 = torch.chunk(target[0], dim=1, chunks=4)
+        Sagittal_ch1, Coronal_ch1, Horizontal_ch1 = split_image(ch1)
+        Sagittal_ch2, Coronal_ch2, Horizontal_ch2 = split_image(ch2)
+        Sagittal_ch4, Coronal_ch4, Horizontal_ch4 = split_image(ch4)
 
-            _, pred_ch1, pred_ch2, pred_ch4 = torch.chunk(prediction, dim=1, chunks=4)
-            Sagittal_pred_ch1, Coronal_pred_ch1, Horizontal_pred_ch1 = split_image(pred_ch1)
-            Sagittal_pred_ch2, Coronal_pred_ch2, Horizontal_pred_ch2 = split_image(pred_ch2)
-            Sagittal_pred_ch4, Coronal_pred_ch4, Horizontal_pred_ch4 = split_image(pred_ch2)
+        _, pred_ch1, pred_ch2, pred_ch4 = torch.chunk(prediction[0], dim=1, chunks=4)
+        Sagittal_pred_ch1, Coronal_pred_ch1, Horizontal_pred_ch1 = split_image(pred_ch1)
+        Sagittal_pred_ch2, Coronal_pred_ch2, Horizontal_pred_ch2 = split_image(pred_ch2)
+        Sagittal_pred_ch4, Coronal_pred_ch4, Horizontal_pred_ch4 = split_image(pred_ch2)
 
-            self.writer.add_image(prefix + "seg_Sagittal_ch1", Sagittal_ch1, global_step, dataformats='CHW')
-            self.writer.add_image(prefix + "seg_Coronal_ch1", Coronal_ch1, global_step, dataformats='CHW')
-            self.writer.add_image(prefix + "seg_Horizontal_ch1", Horizontal_ch1, global_step, dataformats='CHW')
-            self.writer.add_image(prefix + "seg_Sagittal_ch2", Sagittal_ch2, global_step, dataformats='CHW')
-            self.writer.add_image(prefix + "seg_Coronal_ch2", Coronal_ch2, global_step, dataformats='CHW')
-            self.writer.add_image(prefix + "seg_Horizontal_ch2", Horizontal_ch2, global_step, dataformats='CHW')
-            self.writer.add_image(prefix + "seg_Sagittal_ch4", Sagittal_ch4, global_step, dataformats='CHW')
-            self.writer.add_image(prefix + "seg_Coronal_ch4", Coronal_ch4, global_step, dataformats='CHW')
-            self.writer.add_image(prefix + "seg_Horizontal_ch4", Horizontal_ch4, global_step, dataformats='CHW')
-            self.writer.add_image(prefix + "pred_Sagittal_ch1", Sagittal_pred_ch1, global_step,
-                                  dataformats='CHW')
-            self.writer.add_image(prefix + "pred_Coronal_ch1", Coronal_pred_ch1, global_step, dataformats='CHW')
-            self.writer.add_image(prefix + "pred_Horizontal_ch1", Horizontal_pred_ch1, global_step,
-                                  dataformats='CHW')
-            self.writer.add_image(prefix + "pred_Sagittal_ch2", Sagittal_pred_ch2, global_step,
-                                  dataformats='CHW')
-            self.writer.add_image(prefix + "pred_Coronal_ch2", Coronal_pred_ch2, global_step, dataformats='CHW')
-            self.writer.add_image(prefix + "pred_Horizontal_ch2", Horizontal_pred_ch2, global_step,
-                                  dataformats='CHW')
-            self.writer.add_image(prefix + "pred_Sagittal_ch4", Sagittal_pred_ch4, global_step,
-                                  dataformats='CHW')
-            self.writer.add_image(prefix + "pred_Coronal_ch4", Coronal_pred_ch4, global_step, dataformats='CHW')
-            self.writer.add_image(prefix + "pred_Horizontal_ch4", Horizontal_pred_ch4, global_step,
-                                  dataformats='CHW')
+        self.writer.add_image(prefix + "seg_Sagittal_ch1", Sagittal_ch1, global_step, dataformats='CHW')
+        self.writer.add_image(prefix + "seg_Coronal_ch1", Coronal_ch1, global_step, dataformats='CHW')
+        self.writer.add_image(prefix + "seg_Horizontal_ch1", Horizontal_ch1, global_step, dataformats='CHW')
+        self.writer.add_image(prefix + "seg_Sagittal_ch2", Sagittal_ch2, global_step, dataformats='CHW')
+        self.writer.add_image(prefix + "seg_Coronal_ch2", Coronal_ch2, global_step, dataformats='CHW')
+        self.writer.add_image(prefix + "seg_Horizontal_ch2", Horizontal_ch2, global_step, dataformats='CHW')
+        self.writer.add_image(prefix + "seg_Sagittal_ch4", Sagittal_ch4, global_step, dataformats='CHW')
+        self.writer.add_image(prefix + "seg_Coronal_ch4", Coronal_ch4, global_step, dataformats='CHW')
+        self.writer.add_image(prefix + "seg_Horizontal_ch4", Horizontal_ch4, global_step, dataformats='CHW')
+        self.writer.add_image(prefix + "pred_Sagittal_ch1", Sagittal_pred_ch1, global_step, dataformats='CHW')
+        self.writer.add_image(prefix + "pred_Coronal_ch1", Coronal_pred_ch1, global_step, dataformats='CHW')
+        self.writer.add_image(prefix + "pred_Horizontal_ch1", Horizontal_pred_ch1, global_step, dataformats='CHW')
+        self.writer.add_image(prefix + "pred_Sagittal_ch2", Sagittal_pred_ch2, global_step, dataformats='CHW')
+        self.writer.add_image(prefix + "pred_Coronal_ch2", Coronal_pred_ch2, global_step, dataformats='CHW')
+        self.writer.add_image(prefix + "pred_Horizontal_ch2", Horizontal_pred_ch2, global_step, dataformats='CHW')
+        self.writer.add_image(prefix + "pred_Sagittal_ch4", Sagittal_pred_ch4, global_step, dataformats='CHW')
+        self.writer.add_image(prefix + "pred_Coronal_ch4", Coronal_pred_ch4, global_step, dataformats='CHW')
+        self.writer.add_image(prefix + "pred_Horizontal_ch4", Horizontal_pred_ch4, global_step, dataformats='CHW')
 
     def _add_noise(self, alfa):
         model_parameters = list(filter(lambda p: p.requires_grad, self.model.parameters()))

@@ -73,7 +73,10 @@ class RunningAverage:
     def update(self, value, n=1):
         self.count += n
         self.sum += value * n
-        self.avg = self.sum / self.count
+        try:
+            self.avg = self.sum / self.count
+        except ZeroDivisionError:
+            self.avg = 0
 
 
 def get_number_of_learnable_parameters(model):

@@ -5,9 +5,9 @@ from DataLoader.CustomDataset import CustomDataset
 from torch.utils.data import DataLoader, random_split
 import nibabel as nib
 from DataLoader.BasicTransformations import train_transforms, val_transform
-from monai.utils import set_determinism
 from skimage import data, color, io, img_as_float
 import numpy as np
+from monai.metrics import DiceMetric
 
 
 def show_image(image, name=None):
@@ -135,7 +135,6 @@ def seg_mask(img, mask, alpha=0.6):
 
 
 if __name__ == '__main__':
-    set_determinism(seed=0)
 
     loader_path = r'C:\Users\User\Documents\FinalProject\MICCAI_BraTS2020\MICCAI_BraTS2020_TrainingData'
     # loader_path = '/tcmldrive/shared/BraTS2020 Training/'
@@ -150,17 +149,13 @@ if __name__ == '__main__':
     train, val = random_split(dataset, [n_train, n_val])
     train.dataset.transform = train_transforms
     val.dataset.transform = val_transform
-    data = val.__getitem__(17)
-    images, seg = data["image"], data["seg"]
-    display_image(images, seg, 120)
+    # data = val.__getitem__(17)
+    # images, seg = data["image"], data["seg"]
+    # display_image(images, seg, 120)
     # show_image(seg)
-    # train_loader = DataLoader(train, batch_size=1, shuffle=True, num_workers=8, pin_memory=True)
-    # img = images[0, :, 120, :]
-    # seg = seg[:, 120, :]
-    # seg_mask(img, seg)
-
+    train_loader = DataLoader(train, batch_size=1, shuffle=True, num_workers=8, pin_memory=True)
     # batch = iter(train_loader).next()
-    # seg = batch["seg"]
+    # image, seg = batch["image"], batch["seg"]
     # tc = seg[:,0:1]
     # print(torch.unique(tc))
     # nans = torch.isnan(tc)
