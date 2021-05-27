@@ -12,9 +12,12 @@ run_name = "new baseline ???"
 run_purpose = "trying to compare between accumulation and batch size"
 
 # model
+dimensions = 3
 in_channels = 4
 out_channels = 4
 f_maps = (32, 64, 128, 256, 320)
+strides = (2, 2, 2, 2)
+num_res_units = 2
 
 # loss
 loss_name = 'DiceCE'
@@ -29,20 +32,20 @@ batch_size = 2
 
 # optimizer
 optimizer_name = "Adam"
-initial_lr = 3e-4
-momentum = 0.99
-weight_decay = 3e-5
-nesterov = True
+initial_lr = 1e-4
+weight_decay = 1e-5
+# nesterov = True
+# momentum = 0.99
 amsgrad = True
 
 # train
-max_num_epochs = 10
+max_num_epochs = 20
 best_eval_score = 0.7
-validate_after_iter = 75
-log_after_iter = 75
+validate_after_iter = 70
+log_after_iter = 70
 
 # architecture
-kernel_size = (3, 3, 3)
-padding = (1, 1, 1)
-stride = (2, 2, 2)
-output_padding = (1, 1, 1)
+# kernel_size = (3, 3, 3)
+# padding = (1, 1, 1)
+# stride = (2, 2, 2)
+# output_padding = (1, 1, 1)

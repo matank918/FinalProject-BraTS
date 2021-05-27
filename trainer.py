@@ -78,10 +78,6 @@ class UNet3DTrainer:
                 # compute gradients and update parameters
                 global_step = num_epoch * len(trainloaders) + i
 
-                if self.scheduler is not None:
-                    # adjust learning rate if necessary
-                    self.scheduler.step()
-                    # log current learning rate in tensorboard
 
                 self.logger.info(f'Training iteration [{i}/{len(trainloaders)}]. '
                                  f'Epoch [{num_epoch}/{self.max_num_epochs}]. '
@@ -94,6 +90,8 @@ class UNet3DTrainer:
                         f' Loss: {train_losses.avg:.4f}. '
                         f' Evaluation score: {train_eval_scores.avg:.4f}. '
                     )
+                    self._log_stats(global_step=global_step, phase='train',
+                                    loss_avg=train_losses.avg, eval_score_avg=train_eval_scores.avg)
 
                     self._log_params(global_step)
                     self._log_lr(global_step)
@@ -103,9 +101,9 @@ class UNet3DTrainer:
                     self.model.eval()
 
                     # evaluate on validation set
-                    val_losses, val_score, value_tc, value_wt, value_wt = self.validate(evalloader)
-                    self._log_stats(global_step, 'val', val_losses, val_score,
-                                    value_tc, value_wt, value_wt)
+                    val_losses, val_score, value_tc, value_wt, value_et = self.validate(evalloader)
+                    self._log_stats(global_step=global_step, phase='val', loss_avg=val_losses, eval_score_avg=val_score,
+                                    eval_tc_avg=value_tc, eval_wt_avg=value_wt, eval_et_avg=value_et)
 
                     # set the model back to training mode
                     self.model.train()
@@ -117,6 +115,13 @@ class UNet3DTrainer:
 
                 iter_time = time.time() - iter_time
                 self.logger.info(f"Iter {i} duration is {iter_time:.2f} seconds")
+
+            if self.scheduler is not None:
+                # adjust learning rate if necessary
+                self.scheduler.step()
+                # log current learning rate in tensorboard
+            global_step = num_epoch * len(trainloaders)
+            self._log_lr(global_step)
 
             epoch_time = time.time() - epoch_time
             self.logger.info(f"epoch {num_epoch} duration is {(epoch_time / 60):.2f} minutes")
@@ -224,15 +229,21 @@ class UNet3DTrainer:
         lr = self.optimizer.param_groups[0]['lr']
         self.writer.add_scalar('learning_rate', lr, global_step)
 
-    def _log_stats(self, global_step, phase, loss_avg, eval_score_avg, eval_tc_avg, eval_wt_avg, eval_et_avg):
-        tag_value = {
-            f'{phase}_loss_avg': loss_avg,
-            f'{phase}_eval_score_avg': eval_score_avg,
-            f'{phase}_eval_tc_avg': eval_tc_avg,
-            f'{phase}_eval_wt_avg': eval_wt_avg,
-            f'{phase}_eval_et_avg': eval_et_avg,
+    def _log_stats(self, global_step, phase, loss_avg, eval_score_avg, eval_tc_avg=None, eval_wt_avg=None, eval_et_avg=None):
+        if eval_tc_avg is not None:
+            tag_value = {
+                f'{phase}_loss_avg': loss_avg,
+                f'{phase}_eval_score_avg': eval_score_avg,
+                f'{phase}_eval_tc_avg': eval_tc_avg,
+                f'{phase}_eval_wt_avg': eval_wt_avg,
+                f'{phase}_eval_et_avg': eval_et_avg,
 
-        }
+            }
+        else:
+            tag_value = {
+                f'{phase}_loss_avg': loss_avg,
+                f'{phase}_eval_score_avg': eval_score_avg,
+            }
 
         for tag, value in tag_value.items():
             self.writer.add_scalar(tag, value, global_step)

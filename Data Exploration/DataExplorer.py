@@ -4,10 +4,12 @@ from utils.utils import split_image
 from DataLoader.CustomDataset import CustomDataset
 from torch.utils.data import DataLoader, random_split
 import nibabel as nib
-from DataLoader.BasicTransformations import train_transforms, val_transform
 from skimage import data, color, io, img_as_float
 import numpy as np
 from monai.metrics import DiceMetric
+from DataLoader.BasicTransformations import *
+from DataLoader.CustomTransformation import *
+import copy
 
 
 def show_image(image, name=None):
@@ -61,23 +63,23 @@ def display_image(image, seg, slice_i):
     plt.show()
     if seg is not None:
         fig, axs = plt.subplots(3, 3, figsize=(20, 20))
-        axs[0, 0].imshow(seg[0, slice_i, :, :].detach().cpu(), cmap="gray")
+        axs[0, 0].imshow(seg[1, slice_i, :, :].detach().cpu(), cmap="gray")
         axs[0, 0].set_title("Tumor core - Sagittal")
-        axs[1, 0].imshow(seg[0, :, slice_i, :].detach().cpu(), cmap="gray")
+        axs[1, 0].imshow(seg[1, :, slice_i, :].detach().cpu(), cmap="gray")
         axs[1, 0].set_title("Tumor core - Coronal")
-        axs[2, 0].imshow(seg[0, :, :, slice_i].detach().cpu(), cmap="gray")
+        axs[2, 0].imshow(seg[1, :, :, slice_i].detach().cpu(), cmap="gray")
         axs[2, 0].set_title("Tumor core - Horizontal")
-        axs[0, 1].imshow(seg[1, slice_i, :, :].detach().cpu(), cmap="gray")
+        axs[0, 1].imshow(seg[2, slice_i, :, :].detach().cpu(), cmap="gray")
         axs[0, 1].set_title("WT - Sagittal")
-        axs[1, 1].imshow(seg[1, :, slice_i, :].detach().cpu(), cmap="gray")
+        axs[1, 1].imshow(seg[2, :, slice_i, :].detach().cpu(), cmap="gray")
         axs[1, 1].set_title("WT - Coronal")
-        axs[2, 1].imshow(seg[1, :, :, slice_i].detach().cpu(), cmap="gray")
+        axs[2, 1].imshow(seg[2, :, :, slice_i].detach().cpu(), cmap="gray")
         axs[2, 1].set_title("WT - Horizontal")
-        axs[0, 2].imshow(seg[2, slice_i, :, :].detach().cpu(), cmap="gray")
+        axs[0, 2].imshow(seg[3, slice_i, :, :].detach().cpu(), cmap="gray")
         axs[0, 2].set_title("Enhancing tumor - Sagittal")
-        axs[1, 2].imshow(seg[2, :, slice_i, :].detach().cpu(), cmap="gray")
+        axs[1, 2].imshow(seg[3, :, slice_i, :].detach().cpu(), cmap="gray")
         axs[1, 2].set_title("Enhancing tumor - Coronal")
-        axs[2, 2].imshow(seg[2, :, :, slice_i].detach().cpu(), cmap="gray")
+        axs[2, 2].imshow(seg[3, :, :, slice_i].detach().cpu(), cmap="gray")
         axs[2, 2].set_title("Enhancing tumor - Horizontal")
 
         plt.show()
@@ -100,65 +102,50 @@ def histogram_image(image):
     plt.show()
 
 
-def seg_mask(img, mask, alpha=0.6):
-    img = img_as_float(img)
-    rows, cols = img.shape
-
-    # Construct a colour image to superimpose
-    color_mask = np.zeros((rows, cols, 3))
-    color_mask[mask > 0.9] = [1, 0, 0]  # Red block
-    # color_mask[170:270, 40:120] = [0, 1, 0]  # Green block
-    # color_mask[200:350, 200:350] = [0, 0, 1]  # Blue block
-
-    # Construct RGB version of grey-level image
-    img_color = np.dstack((img, img, img))
-
-    # Convert the input image and color mask to Hue Saturation Value (HSV)
-    # colorspace
-    img_hsv = color.rgb2hsv(img_color)
-    color_mask_hsv = color.rgb2hsv(color_mask)
-
-    # Replace the hue and saturation of the original image
-    # with that of the color mask
-    img_hsv[..., 0] = color_mask_hsv[..., 0]
-    img_hsv[..., 1] = color_mask_hsv[..., 1] * alpha
-
-    img_masked = color.hsv2rgb(img_hsv)
-
-    # Display the output
-    f, (ax0, ax1, ax2) = plt.subplots(1, 3,
-                                      subplot_kw={'xticks': [], 'yticks': []})
-    ax0.imshow(img, cmap="gray")
-    ax1.imshow(color_mask)
-    ax2.imshow(img_masked)
-    plt.show()
-
-
 if __name__ == '__main__':
-
+    torch.manual_seed(0)
     loader_path = r'C:\Users\User\Documents\FinalProject\MICCAI_BraTS2020\MICCAI_BraTS2020_TrainingData'
     # loader_path = '/tcmldrive/shared/BraTS2020 Training/'
     filename = r"C:\Users\User\AppData\Local\Temp\tmp5_bqwbm6\Task01_BrainTumour\imagesTr\BRATS_001.nii.gz"
     label = r"C:\Users\User\AppData\Local\Temp\tmp5_bqwbm6\Task01_BrainTumour\labelsTr\BRATS_001.nii.gz"
-    # images = nib.load(filename)
-    # label = nib.load(label).get_fdaya
+    train_transforms = Compose([
+        LoadImaged(keys=["image", "seg"]),
+        ConvertToMultiChannelBasedOnBratsClassesd(keys="seg"),
+        Orientationd(keys=["image", "seg"], axcodes="RAS"),
+        RandSpatialCropd(keys=["image", "seg"], roi_size=[128, 128, 128], random_size=False),
+        # CenterSpatialCropd(keys=["image", "seg"], roi_size=[128, 128, 128]),
+        RandFlipd(keys=["image", "seg"], prob=0.5, spatial_axis=(0, 1, 2)),
+        RandShiftIntensityd(keys="image", offsets=0.1, prob=0.5),
+        ToTensord(keys=["image", "seg"])
+    ])
+
+    val_transform = Compose(
+        [
+            LoadImaged(keys=["image", "seg"]),
+            ConvertToMultiChannelBasedOnBratsClassesd(keys="seg"),
+            Orientationd(keys=["image", "seg"], axcodes="RAS"),
+            CenterSpatialCropd(keys=["image", "seg"], roi_size=[128, 128, 128]),
+            NormalizeIntensityd(keys="image", nonzero=True, channel_wise=True),
+            RandGaussianNoise3D(prob=1, mag=0),
+            Rotate3D(prob=1, mag=1),
+            ToTensord(keys=["image", "seg"]),
+        ]
+    )
 
     dataset = CustomDataset(data_dir=loader_path)
     n_val = int(len(dataset) * 0.1)
     n_train = len(dataset) - n_val
     train, val = random_split(dataset, [n_train, n_val])
+    train = copy.deepcopy(train)
+    val = copy.deepcopy(val)
     train.dataset.transform = train_transforms
     val.dataset.transform = val_transform
-    # data = val.__getitem__(17)
-    # images, seg = data["image"], data["seg"]
-    # display_image(images, seg, 120)
-    # show_image(seg)
-    train_loader = DataLoader(train, batch_size=1, shuffle=True, num_workers=8, pin_memory=True)
-    # batch = iter(train_loader).next()
-    # image, seg = batch["image"], batch["seg"]
-    # tc = seg[:,0:1]
-    # print(torch.unique(tc))
-    # nans = torch.isnan(tc)
+    data = train.__getitem__(17)
+    images, seg = data["image"], data["seg"]
+    display_image(images, seg, 60)
+    data = val.__getitem__(17)
+    images, seg = data["image"], data["seg"]
+    display_image(images, seg, 60)
 
     # print(torch.unique(data['seg']))
     # #

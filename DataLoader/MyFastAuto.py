@@ -26,7 +26,7 @@ Transform = [RandGaussianNoise3D, Rotate3D, Scale3D, TranslateXYZ]
 
 
 class FastAutoAugment:
-    def __init__(self, model, dataset, optimizer, scheduler, loss_criterion, eval_criterion, logger):
+    def __init__(self, model, dataset, optimizer, scheduler, loss_criterion, eval_criterion):
         self.model = model
         self.dataset = dataset
         self.optimizer = optimizer
@@ -34,7 +34,6 @@ class FastAutoAugment:
         self.loss_criterion = loss_criterion
         self.eval_criterion = eval_criterion
         self.lr_scheduler = scheduler
-        self.logger = logger
 
     def fast_auto_augment(self, K=5, B=20, T=1, N=10, num_process=3):
         """
@@ -71,8 +70,10 @@ class FastAutoAugment:
         print('[+] Child %d training strated (GPU: %d)' % (fold, device_id))
 
         self.reset_weights(self.model)
+        model = copy.deepcopy(self.model)
+        logger = get_logger(cfg.log_path)
         # start training
-        trainer = self.train(Dm_indx, device=device)
+        trainer = self.train(model, logger, Dm_indx, device)
 
         for t in range(T):
             subpolicies = self.search_subpolicies(transform_candidates, Da_indx, trainer, B)
@@ -80,20 +81,18 @@ class FastAutoAugment:
             _transform.extend([subpolicy[0] for subpolicy in subpolicies])
         return _transform
 
-    def train(self, Dm_indx, device):
+    def train(self, model, logger, Dm_indx, device):
         train_subset = Subset(self.dataset, Dm_indx)
         trainloader = torch.utils.data.DataLoader(train_subset, batch_size=cfg.batch_size)
-        self.model.to(device)
+        model.to(device)
 
-        trainer = UNet3DTrainer(model=self.model, logger=self.logger, optimizer=self.optimizer,
+        trainer = UNet3DTrainer(model=model, logger=logger, device=device,
+                                optimizer=self.optimizer,
                                 loss_criterion=self.loss_criterion,
                                 lr_scheduler=self.lr_scheduler,
-                                eval_criterion=self.eval_criterion, device=device,
-                                best_eval_score=cfg.best_eval_score,
-                                max_num_epochs=1,
-                                accumulation_steps=cfg.accumulation_steps,
-                                log_after_iter=cfg.log_after_iter,
-                                validate_after_iter=cfg.validate_after_iter)
+                                eval_criterion=self.eval_criterion,
+                                best_eval_score=cfg.best_eval_score, max_num_epochs=1,
+                                log_after_iter=cfg.log_after_iter, validate_after_iter=cfg.validate_after_iter)
 
         trainer.train(trainloader, None)
 
@@ -113,7 +112,7 @@ class FastAutoAugment:
                 *subpolicy,
                 ToTensord(keys=["image", "seg"])
             ])
-            loss, _ = self.validate(Da_indx, trainer, subpolicy)
+            loss, _, _, _, _ = self.validate(Da_indx, trainer, subpolicy)
             return {'loss': loss, 'status': STATUS_OK}
 
         space = [
@@ -196,6 +195,6 @@ if __name__ == '__main__':
 
     Auto = FastAutoAugment(model=model, loss_criterion=loss_criterion, optimizer=optimizer,
                            scheduler=lr_scheduler,
-                           eval_criterion=eval_criterion, dataset=dataset, logger=logger)
+                           eval_criterion=eval_criterion, dataset=dataset)
 
     print(Auto.fast_auto_augment())

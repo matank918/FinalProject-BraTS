@@ -12,12 +12,12 @@ from DataLoader.BasicTransformations import train_transforms, val_transform
 from monai.networks.layers.factories import Act, Norm
 from trainer import UNet3DTrainer
 from torch.utils.data import DataLoader, random_split
-from nnUnet.nnUnet3d import UNet3D
 from monai.data import DataLoader
 from monai.losses import DiceLoss
 from monai.metrics import DiceMetric
 from monai.networks.nets import UNet
 import torch
+import copy
 from monai.utils import set_determinism
 
 
@@ -25,6 +25,8 @@ def _get_loaders(dataset, val_percent, batch_size):
     n_val = int(len(dataset) * val_percent)
     n_train = len(dataset) - n_val
     train, val = random_split(dataset, [n_train, n_val])
+    train = copy.deepcopy(train)
+    val = copy.deepcopy(val)
     train.dataset.transform = train_transforms
     val.dataset.transform = val_transform
     train_loader = DataLoader(train, batch_size=batch_size, shuffle=True, num_workers=8, pin_memory=True)
@@ -33,8 +35,9 @@ def _get_loaders(dataset, val_percent, batch_size):
 
 
 def _get_model():
-        return UNet(dimensions=3, in_channels=cfg.in_channels, out_channels=cfg.out_channels, channels=cfg.f_maps,
-                    strides=(2, 2, 2, 2), num_res_units=0, act=Act.LEAKYRELU, norm=Norm.BATCH)
+    return UNet(dimensions=cfg.dimensions, in_channels=cfg.in_channels, out_channels=cfg.out_channels,
+                channels=cfg.f_maps,
+                strides=cfg.strides, num_res_units=cfg.num_res_units, act=Act.LEAKYRELU, norm=Norm.BATCH)
 
 
 def _create_loss():
@@ -54,7 +57,7 @@ def _create_optimizer(model):
 
 
 def _create_scheduler(optimizer):
-    lambda1 = lambda iter: 0.99 ** iter
+    lambda1 = lambda epoch: 0.95 ** epoch
     return LambdaLR(optimizer, lr_lambda=lambda1)
 
 
@@ -63,8 +66,8 @@ def _create_eval():
 
 
 if __name__ == '__main__':
-    torch.manual_seed(0)
-    
+    # torch.manual_seed(0)
+
     # Load and log experiment configuration
     logger = get_logger(cfg.log_path)
     logger.info(cfg.id)
@@ -114,10 +117,10 @@ if __name__ == '__main__':
 
     # Create model trainer
     trainer = UNet3DTrainer(model=model, logger=logger, optimizer=optimizer, loss_criterion=loss_criterion,
-                             lr_scheduler=optimizer, device=device, eval_criterion=eval_criterion,
-                             checkpoint_dir=checkpoint_dir, best_eval_score=cfg.best_eval_score,
-                             max_num_epochs=cfg.max_num_epochs,
-                             validate_after_iter=cfg.validate_after_iter, log_after_iter=cfg.log_after_iter)
+                            lr_scheduler=scheduler, device=device, eval_criterion=eval_criterion,
+                            checkpoint_dir=checkpoint_dir, best_eval_score=cfg.best_eval_score,
+                            max_num_epochs=cfg.max_num_epochs,
+                            validate_after_iter=cfg.validate_after_iter, log_after_iter=cfg.log_after_iter)
 
     # Start training
     trainer.train(train_loader, eval_loader)

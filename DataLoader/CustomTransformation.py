@@ -3,18 +3,18 @@ import torch.nn as nn
 import torchvision.transforms as transforms
 import torchio as tio
 import random
-from monai.transforms import RandGaussianNoised, RandAffined
 from abc import ABC, abstractmethod
-from monai.config import DtypeLike, KeysCollection
+from math import pi
+from monai.transforms import LoadImaged, CenterSpatialCropd, Compose, MapTransform, RandShiftIntensityd, \
+    NormalizeIntensityd, RandGaussianNoised, RandFlipd, RandScaleIntensityd, Orientationd, ToTensord, \
+    Spacingd, RandSpatialCropd, RandRotated, RandZoomd, RandAffined
 
 
 class BaseTransform(ABC):
 
-    def __init__(self, keys, prob, mag=0, mode='nearest'):
-        self.keys = keys
+    def __init__(self, prob, mag):
         self.prob = prob
         self.mag = mag
-        self.mode = mode
 
     def __call__(self, data):
         return self.transform(data)
@@ -31,29 +31,31 @@ class BaseTransform(ABC):
 class RandGaussianNoise3D(BaseTransform):
     def transform(self, data):
         mean = self.mag * 5
-        t = RandGaussianNoised(keys=self.keys, prob=self.prob, mean=mean, std=1)
+        t = RandGaussianNoised(keys=["image"], prob=self.prob, mean=mean, std=1)
         return t(data)
 
 
 class TranslateXYZ(BaseTransform):
     def transform(self, data):
         translation = (-int(self.mag * 20), int(self.mag * 20))
-        t = RandAffined(keys=self.keys, prob=self.prob, translate_range=translation, mode=self.mode)
+        t = RandAffined(keys=["image", "seg"], prob=self.prob, translate_range=translation, mode='nearest')
         return t(data)
 
 
 class Rotate3D(BaseTransform):
 
     def transform(self, data):
-        rotate_range = (int(self.mag * 60), int(self.mag * 60))
-        t = RandAffined(keys=self.keys, prob=self.prob, rotate_range=rotate_range, mode=self.mode)
+        rotate_range = (-int(self.mag * 60), int(self.mag * 60))
+        t = RandRotated(keys=["image", "seg"], prob=self.prob, range_x=rotate_range,
+                        range_y=rotate_range, range_z=rotate_range)
+
         return t(data)
 
 
 class Scale3D(BaseTransform):
     def transform(self, data):
         scale = (self.mag * 0.5, self.mag)
-        t = RandAffined(keys=self.keys, prob=self.prob, scale_range=scale, mode=self.mode)
+        t = RandAffined(keys=["image", "seg"], prob=self.prob, scale_range=scale, mode='nearest')
         return t(data)
 #
 #
